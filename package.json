@@ -1,0 +1,21 @@
+{
+  "name": "mcp-auditor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Audits an MCP server's exposed tools for risks to the agent connecting to it.",
+  "type": "module",
+  "scripts": {
+    "target-server": "tsx target-server/server.ts",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^4.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
