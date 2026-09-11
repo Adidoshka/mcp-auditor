@@ -12,7 +12,7 @@ TypeScript. The MCP SDK is first-class in TS, LangGraph has a JS package, and it
 
 ## Structure
 
-```
+```text
 mcp-auditor/
 ├── target-server/          # the malicious MCP server (my own fixture)
 │   ├── server.ts
@@ -38,8 +38,9 @@ mcp-auditor/
 
 Build the attack before the defense, so ground truth always exists.
 
-Eight tools:
-- 4 honest, doing real and boring things
+Ten tools:
+
+- 6 honest, doing real and boring things
 - 1 obvious injection (description directly instructs the agent)
 - 1 subtle injection (reads like a helpful note to the assistant)
 - 2 individually clean, forming a `reads_local` → `writes_external` chain
@@ -60,7 +61,7 @@ Write `ground-truth.yaml` **now**, before any detection code exists:
 
 **My decision, not generated:** what makes the subtle injection subtle. Too obvious and the eval is meaningless; too hard and the classifier looks broken. This is the most important design call in the project.
 
-**Done when:** an MCP client can connect and list all 8 tools.
+**Done when:** an MCP client can connect and list all 10 tools.
 
 ---
 
@@ -110,9 +111,12 @@ Then point the auditor at one MCP server I didn't write, to hit a connection tha
 
 ## Phase 4 — Evaluation
 
-`eval/run.ts` — 10 runs at temperature 0 across all 8 tools, compared against `ground-truth.yaml`.
+`eval/run.ts` — 10 runs at temperature 0 across all 10 tools, compared against `ground-truth.yaml`.
+
+Classifier model: Claude Haiku 4.5, not this project's usual Opus 5 default. Verified against the current Opus 5 and Haiku 4.5 migration guides: Opus 5 and Sonnet 5 reject any non-default `temperature`/`top_p`/`top_k` with a 400, which would make "10 runs at temperature 0" impossible to run at all on either — Haiku 4.5 predates that removal and still takes `temperature` normally. It's also the right-sized model on merits: a short classification repeated 10x per tool across every tool is exactly the workload a fast, cheap model is for, not the frontier one. Worth stating plainly either way: temperature 0 has never guaranteed identical outputs, even on models that accept it — that's exactly what the disagreement-rate metric below is measuring, not something it should find zero of by construction.
 
 Three numbers:
+
 1. **Precision** — of what it flagged, how much was real
 2. **Recall** — of what was real, how much it caught
 3. **Disagreement rate** — how often identical input gave different verdicts (a separate property from accuracy, and rarely measured)
@@ -121,7 +125,7 @@ Then revise the prompt once → `v2.md` → rerun. Two data points beat one numb
 
 **Done when:** `results.md` holds a table worth showing on a slide, including what it still gets wrong.
 
-**Known limitation to state up front:** 8 tools is a tiny test set. This demonstrates a method, not a benchmark — real numbers would need hundreds of labeled cases.
+**Known limitation to state up front:** 10 tools is a tiny test set. This demonstrates a method, not a benchmark — real numbers would need hundreds of labeled cases.
 
 ---
 
@@ -171,7 +175,7 @@ If time runs short: the sandboxed deep probe (report "would probe" instead), too
 ## Mapping to the six topics
 
 | Topic | Where it lives |
-|---|---|
+| --- | --- |
 | 1. Agent frameworks | Phase 5 — fan-out, conditional routing, interrupt, checkpointing |
 | 2. LLM vs deterministic tools | Phases 1–2, split along that exact line |
 | 3. Evaluating an LLM | Phase 4 — accuracy plus consistency |
