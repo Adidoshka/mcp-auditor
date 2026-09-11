@@ -21,4 +21,11 @@ export interface SchemaFinding {
   detail: string;
 }
 
-export type Finding = SchemaFinding;
+export interface CapabilityFinding {
+  mechanism: "capability";
+  source: string;
+  sink: string;
+  detail: string;
+}
+
+export type Finding = SchemaFinding | CapabilityFinding;
