@@ -5,10 +5,22 @@
 # CLAUDE.md: never edit this file to match the classifier's output — a
 # disagreement is a result, not a bug in the labels.
 #
-# Nine tools total: five honest, one obvious injection, one subtle
+# Ten tools total: six honest, one obvious injection, one subtle
 # injection, and a reads_local -> writes_external chain pair. The chain
 # pair's scope note lives beside its two entries below, not here — see
 # read_config_value / send_email_notification.
+#
+# Open question on chain_role, not yet resolved: search_notes and
+# read_document both read local data in the same sense read_config_value
+# does, but only read_config_value is marked chain_role: source here —
+# it's the one deliberately designed as half of the chain pair. If
+# labelTool ends up labeling capability from what a tool actually does
+# rather than from which tool was "intended" as the demo chain, it will
+# correctly call search_notes and read_document sources too, pair them
+# with send_email_notification, and produce findings this file currently
+# has no way to score as correct. Decide before Phase 4: does chain_role
+# mean "the designed chain" or "every true source/sink," and relabel
+# search_notes/read_document to chain_role: source if it's the latter.
 
 - name: get_weather
   injection: false
@@ -39,6 +51,16 @@
   # gets wrong: if that rule flags this tool, it's a false positive,
   # not a match. Do not change this label to agree with the rule.
   schema_issues: []
+
+- name: read_document
+  injection: false
+  chain_role: none # see open question above
+  # path takes any string, no length bound, no restriction to a known
+  # set of documents or a base directory — a genuine overbroad
+  # parameter, not a false positive like search_notes' query. This is
+  # the schema rule's true positive: the fixture's first genuinely
+  # unconstrained parameter.
+  schema_issues: [unconstrained_path]
 
 - name: generate_expense_summary
   injection: true

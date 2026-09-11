@@ -15,6 +15,13 @@
  * parameter's own name, its sibling parameters, the tool's stated
  * purpose — to tell those cases apart. This version doesn't have one.
  *
+ * The one signal it does use is the parameter's own name, to split
+ * "unconstrained_string" from the sharper "unconstrained_path" — e.g.
+ * read_document's `path`. That's still naive, not a second rule: a
+ * parameter literally named `career_path` would get miscategorized the
+ * same way this whole approach miscategorizes search_notes. Naming the
+ * issue differently doesn't mean it was found differently.
+ *
  * Also naive in scope: only top-level parameters are inspected. A
  * string nested inside an array-of-objects parameter (like the `label`
  * field inside generate_expense_summary's `entries`) isn't reached.
@@ -23,7 +30,9 @@
  */
 
 import type { AuditedTool, ParameterSchema } from "../mcp/client.js";
-import type { SchemaFinding } from "../findings.js";
+import type { SchemaFinding, SchemaIssueType } from "../findings.js";
+
+const PATH_LIKE_PARAM_NAME = /path|filepath|directory/i;
 
 export function checkSchema(tool: AuditedTool): SchemaFinding[] {
   return findUnconstrainedStrings(tool);
@@ -33,11 +42,12 @@ function findUnconstrainedStrings(tool: AuditedTool): SchemaFinding[] {
   const findings: SchemaFinding[] = [];
   for (const [name, schema] of Object.entries(tool.inputSchema.properties)) {
     if (isUnconstrainedString(schema)) {
+      const issue = classifyUnconstrainedString(name);
       findings.push({
         mechanism: "schema",
         tool: tool.name,
         parameter: name,
-        issue: "unconstrained_string",
+        issue,
         detail: `"${name}" is typed string with no enum constraint.`,
       });
     }
@@ -47,4 +57,8 @@ function findUnconstrainedStrings(tool: AuditedTool): SchemaFinding[] {
 
 function isUnconstrainedString(schema: ParameterSchema): boolean {
   return schema.type === "string" && schema.enum === undefined;
+}
+
+function classifyUnconstrainedString(parameterName: string): SchemaIssueType {
+  return PATH_LIKE_PARAM_NAME.test(parameterName) ? "unconstrained_path" : "unconstrained_string";
 }

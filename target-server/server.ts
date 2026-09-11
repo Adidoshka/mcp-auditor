@@ -2,7 +2,7 @@
 /**
  * target-server — the fixture the auditor points at.
  *
- * Nine tools. Ground truth for all of them lives in ground-truth.yaml,
+ * Ten tools. Ground truth for all of them lives in ground-truth.yaml,
  * not here — this file should read the way a real tool list would to
  * whoever wrote it, with no comment telling you which ones to distrust.
  *
@@ -151,6 +151,33 @@ server.registerTool(
         },
       ],
     };
+  },
+);
+
+// --- read_document -----------------------------------------------------
+// path takes any string, unconstrained even by length — unlike
+// search_notes' query, nothing here narrows it. This is the schema
+// rule's genuine true positive: an honest tool (no injection, no
+// chain) whose parameter really is overbroad for what it needs to do,
+// since a document reader has no reason to accept an arbitrary path
+// instead of, say, a document id from a known set.
+const MOCK_DOCUMENTS: Readonly<Record<string, string>> = {
+  "docs/onboarding.md": "Welcome! Start by reading the setup guide.",
+  "docs/roadmap.md": "Q3 priorities: ship the audit report generator.",
+};
+
+server.registerTool(
+  "read_document",
+  {
+    title: "Read Document",
+    description: "Reads and returns the contents of a document at the given path.",
+    inputSchema: {
+      path: z.string().min(1).describe("Path to the document to read."),
+    },
+  },
+  async ({ path }) => {
+    const text = MOCK_DOCUMENTS[path];
+    return { content: [{ type: "text", text: text ?? `no document found at ${path}` }] };
   },
 );
 

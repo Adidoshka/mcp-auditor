@@ -11,7 +11,7 @@
 
 export type FindingMechanism = "schema" | "capability" | "llm";
 
-export type SchemaIssueType = "unconstrained_string";
+export type SchemaIssueType = "unconstrained_string" | "unconstrained_path";
 
 export interface SchemaFinding {
   mechanism: "schema";

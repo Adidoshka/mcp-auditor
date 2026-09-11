@@ -18,33 +18,50 @@
 import type { AuditedTool } from "../mcp/client.js";
 import type { CapabilityFinding } from "../findings.js";
 
-export type CapabilityLabel = "reads_local" | "reads_remote" | "writes_external" | "none";
+/**
+ * A tool's declared capabilities. Set-valued, not single-valued: a tool
+ * that both reads a local file and posts it externally in one call is a
+ * real pattern (a self-contained exfiltration tool, no second tool
+ * needed), and forcing a single label per tool would make labelTool
+ * pick one and silently lose the other. This project's nine tools don't
+ * happen to contain that case — every source and every sink here is a
+ * separate tool — but a real server audited later might, and the type
+ * shouldn't assume it away. "No capability" is the empty set; there's
+ * no separate "none" member.
+ */
+export type Capability = "reads_local" | "reads_remote" | "writes_external";
 
 /**
- * Labels a single tool's capability.
+ * Labels a single tool's capabilities.
  *
  * THIS IS THE DECISION. Not implemented on purpose — see the file
  * header and CLAUDE.md's "Things I write myself."
  */
-export function labelTool(tool: AuditedTool): CapabilityLabel {
+export function labelTool(tool: AuditedTool): ReadonlySet<Capability> {
   throw new Error(
     `labelTool is not implemented yet (see rules/capability.ts) — called for tool "${tool.name}"`,
   );
 }
 
 /**
- * Given every tool's capability label, finds every reads_local ->
+ * Given every tool's capability set, finds every reads_local ->
  * writes_external pair. Doesn't re-decide labels, doesn't rank them by
  * plausibility — one finding per (source, sink) pair, full cross
- * product, since nothing at this layer knows which pairs an agent
- * would actually chain together in practice.
+ * product, since nothing at this layer knows which pairs an agent would
+ * actually chain together in practice.
+ *
+ * A tool holding both capabilities appears in both `sources` and
+ * `sinks`, so it pairs with itself in the output. That's intentional,
+ * not a bug to filter out: a single tool that reads local data and
+ * sends it externally in the same call is the chain, collapsed into one
+ * hop instead of two.
  */
 export function findCapabilityChains(
   tools: readonly AuditedTool[],
-  labels: ReadonlyMap<string, CapabilityLabel>,
+  labels: ReadonlyMap<string, ReadonlySet<Capability>>,
 ): CapabilityFinding[] {
-  const sources = tools.filter((t) => labels.get(t.name) === "reads_local");
-  const sinks = tools.filter((t) => labels.get(t.name) === "writes_external");
+  const sources = tools.filter((t) => labels.get(t.name)?.has("reads_local") ?? false);
+  const sinks = tools.filter((t) => labels.get(t.name)?.has("writes_external") ?? false);
 
   const findings: CapabilityFinding[] = [];
   for (const source of sources) {
