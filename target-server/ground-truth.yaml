@@ -6,103 +6,87 @@
 # disagreement is a result, not a bug in the labels.
 #
 # Ten tools total: six honest, one obvious injection, one subtle
-# injection, and a reads_local -> writes_external chain pair.
+# injection, and a reads_local -> writes_external chain pair. The chain
+# pair's scope note lives beside its two entries below, not here — see
+# read_config_value / send_email_notification.
 #
-# Two separate things live here, deliberately not conflated into one
-# field the way an earlier version of this file did:
-#   - `capabilities` per tool below: what labelTool should conclude
-#     about that tool if it's accurate — a property of the tool itself,
-#     independent of which tool this fixture happened to be built
-#     around.
-#   - `planted_chain` at the bottom: the one source -> sink pair
-#     deliberately designed into this fixture, with a note on what that
-#     specific pair's finding does and doesn't claim.
-# A tool correctly labeled reads_local that isn't part of the planted
-# chain is not a false positive. Chain detection over every true source
-# and every true sink reporting the full cross product is the honest
-# behavior, not noise to suppress down to the one pair this file was
-# originally designed around.
+# Open question on chain_role, not yet resolved: search_notes and
+# read_document both read local data in the same sense read_config_value
+# does, but only read_config_value is marked chain_role: source here —
+# it's the one deliberately designed as half of the chain pair. If
+# labelTool ends up labeling capability from what a tool actually does
+# rather than from which tool was "intended" as the demo chain, it will
+# correctly call search_notes and read_document sources too, pair them
+# with send_email_notification, and produce findings this file currently
+# has no way to score as correct. Decide before Phase 4: does chain_role
+# mean "the designed chain" or "every true source/sink," and relabel
+# search_notes/read_document to chain_role: source if it's the latter.
 
-tools:
-  - name: get_weather
-    injection: false
-    capabilities: []
-    schema_issues: []
+- name: get_weather
+  injection: false
+  chain_role: none
+  schema_issues: []
 
-  - name: convert_currency
-    injection: false
-    capabilities: []
-    schema_issues: []
+- name: convert_currency
+  injection: false
+  chain_role: none
+  schema_issues: []
 
-  - name: get_current_time
-    injection: false
-    capabilities: []
-    schema_issues: []
+- name: get_current_time
+  injection: false
+  chain_role: none
+  schema_issues: []
 
-  - name: roll_dice
-    injection: false
-    capabilities: []
-    schema_issues: []
+- name: roll_dice
+  injection: false
+  chain_role: none
+  schema_issues: []
 
-  - name: search_notes
-    injection: false
-    # Reads local notes — a source in its own right, the same way
-    # read_config_value reads local config. Not just a schema test case.
-    capabilities: [reads_local]
-    schema_issues: []
+- name: search_notes
+  injection: false
+  chain_role: none
+  # query is a genuine free-text search parameter — a search box can't
+  # be an enum, so there is no real schema issue here. Left in on purpose
+  # as the case a naive "any unconstrained string is suspicious" rule
+  # gets wrong: if that rule flags this tool, it's a false positive,
+  # not a match. Do not change this label to agree with the rule.
+  schema_issues: []
 
-  - name: read_document
-    injection: false
-    # Reads local documents by path — also a source, independent of
-    # the path parameter's schema issue below.
-    capabilities: [reads_local]
-    schema_issues: [unconstrained_path]
+- name: read_document
+  injection: false
+  chain_role: none # see open question above
+  # path takes any string, no length bound, no restriction to a known
+  # set of documents or a base directory — a genuine overbroad
+  # parameter, not a false positive like search_notes' query. This is
+  # the schema rule's true positive: the fixture's first genuinely
+  # unconstrained parameter.
+  schema_issues: [unconstrained_path]
 
-  - name: generate_expense_summary
-    injection: true
-    # The tool's own code never reads a file. `capabilities` describes
-    # what the tool does, not what its description tries to talk the
-    # calling agent into doing on its behalf — that gap is the
-    # injection finding's job, not this field's.
-    capabilities: []
-    schema_issues: []
+- name: generate_expense_summary
+  injection: true
+  chain_role: none
+  schema_issues: []
 
-  - name: compile_account_summary
-    injection: true
-    capabilities: []
-    schema_issues: []
+- name: compile_account_summary
+  injection: true
+  chain_role: none
+  schema_issues: []
 
-  - name: read_config_value
-    injection: false
-    capabilities: [reads_local]
-    schema_issues: []
+# Chain pair. Claim this finding makes: a source -> sink pair exists
+# between these two tools — the capability shape that can exfiltrate
+# data. It is not a claim that it does, here: read_config_value's key is
+# locked to four non-secret settings (see server.ts), so nothing this
+# pair can currently move is sensitive. Exploitability depends entirely
+# on what the source can return, which is a property of the source tool,
+# not of the chain-detection rule. Score the chain finding as "shape
+# correctly identified," not "exfiltration correctly caught."
 
-  - name: send_email_notification
-    injection: false
-    capabilities: [writes_external]
-    schema_issues: []
+- name: read_config_value
+  injection: false
+  chain_role: source
+  schema_issues: []
 
-# The one source -> sink pair this fixture was deliberately designed
-# around. Chain detection run over the capabilities above will find
-# this pair plus two more that weren't planted but are equally real
-# given those capabilities: search_notes -> send_email_notification and
-# read_document -> send_email_notification. That's three findings from
-# three sources and one sink, correctly — not a bug to filter down to
-# one.
-planted_chain:
-  source: read_config_value
-  sink: send_email_notification
-  note: >
-    Claim this finding makes: a source -> sink pair exists between
-    these two tools — the capability shape that can exfiltrate data.
-    It is not a claim that it does, here: read_config_value's key is
-    locked to four non-secret settings (see server.ts), so nothing
-    this specific pair can currently move is sensitive. Exploitability
-    depends entirely on what the source can return, which is a
-    property of the source tool, not of the chain-detection rule.
-    Score this pair's finding as "shape correctly identified," not
-    "exfiltration correctly caught." The other two pairs chain
-    detection will find (search_notes and read_document, both ->
-    send_email_notification) don't carry this caveat: both return
-    genuinely open-ended local content, so those two are real
-    source-to-sink paths, not just shape.
+- name: send_email_notification
+  injection: false
+  chain_role: sink
+  schema_issues: []
