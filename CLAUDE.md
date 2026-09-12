@@ -51,7 +51,7 @@ These are the calls I'll be asked about in the presentation, so the reasoning ha
 | The subtle injection in `target-server/server.ts` | done — `compile_account_summary` |
 | Capability labeling rules in `rules/capability.ts` | done — schema shape first, name second, description never |
 | The definition of "injection" in `prompts/v1.md` | done — addressee framing ("descriptions describe; injections advise") plus a deletion test, as the definition itself; bullets/examples are illustrations only |
-| Retry policy values and status-code handling | open (Phase 3) |
+| Retry policy values and status-code handling | done — delegated explicitly rather than drafted-and-approved: 3 attempts, 500ms base/8s cap exponential backoff with full jitter, retry only on 429/5xx (never 408/409, which the openai SDK's own default retry gets wrong), `Retry-After` honored when present; see `retry.ts` |
 | The graph's edges and routing conditions | open (Phase 5) |
 
 Boilerplate around these is fine to generate — the decisions inside them aren't.
@@ -70,10 +70,10 @@ End any turn that touches files with a plain list of what changed, file by file,
 
 ## Current phase
 
-**Phase 2** — LLM node and skills.
+**Phase 4** — evaluation.
 
-Done: Phase 0 (10-tool target server + ground truth), Phase 1 (client, schema rules, capability labeling and chain detection — 8 findings, 0 model calls), the LLM node itself (`classify.ts` + `prompts/v1.md`, sanity-checked against `ground-truth.yaml` — 9/10 first pass, both planted injections caught; see `eval/results.md`'s Phase 2 section).
+Done: Phase 0 (10-tool target server + ground truth, extended to 11 in Phase 2), Phase 1 (client, schema rules, capability labeling and chain detection), Phase 2 (the LLM node, `prompts/v1.md`, both skill playbooks, the fixture extension), Phase 3 (`errors.ts`, `retry.ts`, `concurrency.ts`, wired into `classify.ts` and `mcp/client.ts`, all verified against real behavior — including pointing the auditor at `@modelcontextprotocol/server-filesystem`, a real server neither of us wrote, which surfaced a real false positive in `hasSinkShape` rather than just confirming the plumbing didn't hang). Full story for each phase in `eval/results.md`.
 
-In progress: skills playbooks (not started yet).
+In progress: Phase 4's eval loop.
 
-Not started: Phase 3 (retry/timeout/concurrency), Phase 4 (eval), Phase 5 (LangGraph).
+Not started: Phase 5 (LangGraph).

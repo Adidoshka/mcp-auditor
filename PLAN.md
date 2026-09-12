@@ -63,6 +63,13 @@ Write `ground-truth.yaml` **now**, before any detection code exists:
 
 **Done when:** an MCP client can connect and list all 10 tools.
 
+*(Update, Phase 2: an 11th tool, `read_user_settings`, was added after
+building the skills mechanism — both injections above turned out to be
+capability-label-blind, so neither could ever exercise a skill. See
+`eval/results.md`'s Phase 2 section for why and what it showed. The ten
+above are Phase 0's original design and still stand as written; this is
+additive, not a correction to them.)*
+
 ---
 
 ## Phase 1 — Deterministic core (no LLM at all)
@@ -111,9 +118,9 @@ Then point the auditor at one MCP server I didn't write, to hit a connection tha
 
 ## Phase 4 — Evaluation
 
-`eval/run.ts` — 10 runs at temperature 0 across all 10 tools, compared against `ground-truth.yaml`.
+`eval/run.ts` — 10 runs at temperature 0 across all 11 tools, compared against `ground-truth.yaml`.
 
-Classifier model: Claude Haiku 4.5, not this project's usual Opus 5 default. Verified against the current Opus 5 and Haiku 4.5 migration guides: Opus 5 and Sonnet 5 reject any non-default `temperature`/`top_p`/`top_k` with a 400, which would make "10 runs at temperature 0" impossible to run at all on either — Haiku 4.5 predates that removal and still takes `temperature` normally. It's also the right-sized model on merits: a short classification repeated 10x per tool across every tool is exactly the workload a fast, cheap model is for, not the frontier one. Worth stating plainly either way: temperature 0 has never guaranteed identical outputs, even on models that accept it — that's exactly what the disagreement-rate metric below is measuring, not something it should find zero of by construction.
+Classifier model: `openai/gpt-oss-20b`, served via NVIDIA NIM — not Claude Haiku 4.5 as originally planned here. Switched mid-Phase-2 when the Anthropic account ran out of credit; the original Haiku reasoning (Opus/Sonnet 5 rejecting non-default `temperature`, Haiku predating that restriction) no longer applies since this isn't an Anthropic model at all — an OpenAI-compatible endpoint takes `temperature` as an ordinary parameter with no such restriction. Full account-access story (two other models tried first, both blocked) is in `classify.ts`'s header and `eval/results.md`. Right-sized on merits either way: a short classification repeated 10x per tool across every tool is exactly the workload a fast, cheap model is for, not the frontier one. Worth stating plainly either way: temperature 0 has never guaranteed identical outputs, even on models that accept it — that's exactly what the disagreement-rate metric below is measuring, not something it should find zero of by construction.
 
 Three numbers:
 
@@ -125,7 +132,7 @@ Then revise the prompt once → `v2.md` → rerun. Two data points beat one numb
 
 **Done when:** `results.md` holds a table worth showing on a slide, including what it still gets wrong.
 
-**Known limitation to state up front:** 10 tools is a tiny test set. This demonstrates a method, not a benchmark — real numbers would need hundreds of labeled cases.
+**Known limitation to state up front:** 11 tools is a tiny test set. This demonstrates a method, not a benchmark — real numbers would need hundreds of labeled cases.
 
 ---
 

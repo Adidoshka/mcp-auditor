@@ -17,12 +17,29 @@
  * never inlined, so Phase 4 can diff v1 against v2 as separate,
  * versioned files rather than a code diff.
  *
- * No retry, no timeout, no concurrency limit here — that's Phase 3.
- * A failed call just throws — the SDK's own error for a transport or
- * status-code failure, a SyntaxError if the response body isn't valid
- * JSON, or a ZodError if it's JSON but doesn't match the schema. All
- * three are "the call failed," left for the caller to sort out; Phase
- * 3 is where that gets typed into slow/refusing/malformed.
+ * `classifyDescription`'s optional `skills` are the one disclosed
+ * exception to "description only": which skill(s) apply to a tool is
+ * decided from its capability labels (schema shape and name) in
+ * llm/skills.ts, not here — this function just concatenates whatever
+ * skill text it's handed onto the system prompt. It doesn't select
+ * skills itself, and it never sees the labels or the schema/name that
+ * produced them, only the resulting text. See findings.ts's header for
+ * why the selection still needs disclosing on the finding, and
+ * llm/skills.ts's header for why selection lives there instead of
+ * here.
+ *
+ * Retry, timeouts, and typed errors (Phase 3): every failure this
+ * function can throw comes out as a SlowError, RefusingError, or
+ * MalformedError (errors.ts) — never the SDK's own raw error, a bare
+ * SyntaxError, or a bare ZodError, though those are still the `cause`.
+ * Retry itself lives in retry.ts, not here or in the openai SDK's own
+ * built-in retry — the client below sets `maxRetries: 0` specifically
+ * because the SDK's default retry also retries 408 and 409 (both 4xx),
+ * which would silently violate "never retry 4xx" the moment either
+ * status showed up; see retry.ts's header for the full reasoning.
+ * Concurrency isn't bounded here — a single classifyDescription call
+ * has nothing to bound — that's concurrency.ts, for whoever calls this
+ * many times at once (Phase 4's eval loop).
  *
  * Model: openai/gpt-oss-20b, served via NVIDIA NIM's OpenAI-compatible
  * endpoint — not a Claude model at all, so none of the Anthropic-specific
@@ -80,8 +97,13 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import OpenAI from "openai";
+import { Agent, fetch as undiciFetch } from "undici";
 import { z } from "zod/v3";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { loadSkillText } from "./skills.js";
+import type { InjectionFinding, SkillName } from "../findings.js";
+import { withRetry, isRetryableStatus } from "../retry.js";
+import { SlowError, RefusingError, MalformedError, type ClassifiedError } from "../errors.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROMPT_PATH = join(__dirname, "prompts", "v1.md");
@@ -91,6 +113,18 @@ const PROMPT_PATH = join(__dirname, "prompts", "v1.md");
 // was the first choice; it 404s on this account).
 const MODEL = "openai/gpt-oss-20b";
 const NIM_BASE_URL = "https://integrate.api.nvidia.com/v1";
+
+// Separate on purpose, per PLAN.md's Phase 3 bullet list: a dead
+// connection and a slow-but-working generation are different failure
+// modes and deserve different patience. CONNECT_TIMEOUT_MS bounds only
+// opening the TCP/TLS connection — a live HTTPS endpoint should manage
+// that in a few seconds; if it can't, the request layer's retry is a
+// better response than waiting longer here. PER_CALL_TIMEOUT_MS bounds
+// the whole request once connected, generous enough for gpt-oss-20b's
+// visible chain-of-thought at max_tokens: 1024 (observed completions up
+// to ~550 tokens in testing) plus room for a busy endpoint.
+const CONNECT_TIMEOUT_MS = 5_000;
+const PER_CALL_TIMEOUT_MS = 30_000;
 
 const InjectionVerdictSchema = z.object({
   verdict: z
@@ -137,17 +171,50 @@ function loadPrompt(): string {
 const client = new OpenAI({
   apiKey: process.env.NVIDIA_API_KEY,
   baseURL: NIM_BASE_URL,
+  // 0, not the SDK's default of 2 — see the file header and retry.ts:
+  // the SDK's own retry logic retries 408/409 (4xx), which this
+  // project's constraint 6 forbids. Every retry that happens here goes
+  // through retry.ts's withRetry below instead.
+  maxRetries: 0,
+  timeout: PER_CALL_TIMEOUT_MS,
+  // Node's global fetch and the `undici` package are different
+  // instances of the same library, and the SDK's fetch call can't
+  // recognize a dispatcher from one when using the other (confirmed
+  // empirically: passing only `fetchOptions.dispatcher` throws
+  // "Connection error... incompatible with the fetch implementation").
+  // Passing `fetch` from `undici` alongside the `Agent` built from the
+  // same import fixes it — exactly what the SDK's own client.ts doc
+  // comment for this option recommends.
+  fetch: undiciFetch as unknown as typeof fetch,
+  fetchOptions: {
+    dispatcher: new Agent({ connect: { timeout: CONNECT_TIMEOUT_MS } }),
+  },
 });
+
+export interface ClassifyOptions {
+  /**
+   * Skill text to load alongside prompts/v1.md, keyed by name — see
+   * llm/skills.ts for both the loading and the selection logic.
+   * Concatenated in array order after the base rubric. Defaults to
+   * none: a tool with no capability label gets no skill, not a
+   * fallback default one.
+   */
+  skills?: readonly SkillName[];
+  /**
+   * Left unset by default (the model's own default applies) — Phase
+   * 4's eval harness is the caller that has a reason to pass 0, for
+   * its 10-identical-runs disagreement-rate measurement. Nothing here
+   * decides that; it just doesn't block it.
+   */
+  temperature?: number;
+}
 
 /**
  * Classifies a single tool description against the rubric in
- * prompts/v1.md. Description only, as input — see the file header for
- * why schema is deliberately excluded.
- *
- * `temperature` is optional and left unset by default (the model's own
- * default applies) — Phase 4's eval harness is the caller that has a
- * reason to pass 0, for its 10-identical-runs disagreement-rate
- * measurement. Nothing here decides that; it just doesn't block it.
+ * prompts/v1.md, optionally augmented by capability-specific skills.
+ * Description only, as the thing being judged — see the file header
+ * for why schema/name are deliberately excluded, and for why `skills`
+ * is a disclosed exception rather than a violation of that.
  *
  * `max_tokens: 1024`, not the tighter budget a non-reasoning model would
  * need — confirmed empirically, not guessed. gpt-oss-20b emits visible
@@ -160,33 +227,131 @@ const client = new OpenAI({
  */
 export async function classifyDescription(
   description: string,
-  temperature?: number,
+  options: ClassifyOptions = {},
 ): Promise<InjectionVerdict> {
-  const response = await client.chat.completions.create({
-    model: MODEL,
-    max_tokens: 1024,
-    messages: [
-      { role: "system", content: loadPrompt() },
-      { role: "user", content: description },
-    ],
-    ...(temperature !== undefined ? { temperature } : {}),
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "injection_verdict",
-        schema: injectionVerdictJsonSchema,
-        strict: true,
-      },
-    },
-  });
+  const { skills = [], temperature } = options;
+  const systemPrompt = [loadPrompt(), ...skills.map(loadSkillText)].join("\n\n---\n\n");
 
-  const content = response.choices[0]?.message?.content;
-  if (content === null || content === undefined) {
-    throw new Error("classifyDescription: response had no message content");
+  try {
+    const response = await withRetry(
+      () =>
+        client.chat.completions.create({
+          model: MODEL,
+          max_tokens: 1024,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: description },
+          ],
+          ...(temperature !== undefined ? { temperature } : {}),
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "injection_verdict",
+              schema: injectionVerdictJsonSchema,
+              strict: true,
+            },
+          },
+        }),
+      (error) => (error instanceof OpenAI.APIError ? error.status : undefined),
+      { getRetryAfterMs: (error) => getRetryAfterMs(error) },
+    );
+
+    const content = response.choices[0]?.message?.content;
+    if (content === null || content === undefined) {
+      throw new Error("classifyDescription: response had no message content");
+    }
+
+    // Parsed, then validated against the same schema the request was
+    // built from — see the file header for why this doesn't just trust
+    // response_format to have been honored.
+    return InjectionVerdictSchema.parse(JSON.parse(content));
+  } catch (error) {
+    throw toClassifiedError(error);
   }
+}
 
-  // Parsed, then validated against the same schema the request was built
-  // from — see the file header for why this doesn't just trust
-  // response_format to have been honored.
-  return InjectionVerdictSchema.parse(JSON.parse(content));
+/** Reads a server-supplied retry delay off an OpenAI SDK error, when there is one — see retry.ts's header for why this is preferred over a computed backoff when available. */
+function getRetryAfterMs(error: unknown): number | undefined {
+  if (!(error instanceof OpenAI.APIError) || error.headers === undefined) return undefined;
+  const headerMs = error.headers.get("retry-after-ms");
+  if (headerMs !== null) {
+    const parsed = Number.parseFloat(headerMs);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  const headerSeconds = error.headers.get("retry-after");
+  if (headerSeconds !== null) {
+    const parsedSeconds = Number.parseFloat(headerSeconds);
+    if (Number.isFinite(parsedSeconds)) return parsedSeconds * 1000;
+  }
+  return undefined;
+}
+
+/**
+ * Maps whatever classifyDescription's body can throw into one of
+ * errors.ts's three kinds — see this file's header and errors.ts's own
+ * header for the reasoning behind each bucket. A status that's
+ * retryable but still failing here means retries were already
+ * exhausted by withRetry above; that's a SlowError (the endpoint is
+ * overloaded or rate-limiting, not refusing on principle), where a
+ * non-retryable 4xx is a RefusingError instead.
+ */
+function toClassifiedError(error: unknown): ClassifiedError {
+  if (error instanceof z.ZodError) {
+    return new MalformedError(
+      "classifyDescription: response did not match InjectionVerdictSchema",
+      { cause: error },
+    );
+  }
+  if (error instanceof SyntaxError) {
+    return new MalformedError("classifyDescription: response body was not valid JSON", {
+      cause: error,
+    });
+  }
+  if (error instanceof OpenAI.APIConnectionError) {
+    // Covers APIConnectionTimeoutError too (it extends this) — either
+    // way, nothing responded, so there's nothing to call a refusal.
+    return new SlowError("classifyDescription: could not reach NVIDIA NIM", { cause: error });
+  }
+  if (error instanceof OpenAI.APIError) {
+    const status = error.status;
+    if (status !== undefined && isRetryableStatus(status)) {
+      return new SlowError(
+        `classifyDescription: NIM kept returning ${status} after retries`,
+        { cause: error },
+      );
+    }
+    return new RefusingError(
+      `classifyDescription: NIM refused the request (status ${status ?? "unknown"})`,
+      { status, cause: error },
+    );
+  }
+  // Anything else — including the plain Error above for missing
+  // content — is neither a network condition nor a definitive refusal,
+  // so it's treated as malformed rather than guessed at.
+  return new MalformedError("classifyDescription: unexpected failure", { cause: error });
+}
+
+/**
+ * Shapes a verdict into a Finding, recording which skill(s) (if any)
+ * were loaded for the call — see findings.ts's header for why that's
+ * disclosed rather than implicit. Returns null for a not_injected
+ * verdict, same convention rules/schema.ts and rules/capability.ts
+ * follow: a Finding is something to report, not a per-tool record that
+ * nothing was wrong. No model call here, no new decision — this only
+ * packages a decision classifyDescription already made.
+ */
+export function buildInjectionFinding(
+  tool: string,
+  verdict: InjectionVerdict,
+  skills: readonly SkillName[],
+): InjectionFinding | null {
+  if (verdict.verdict !== "injected") return null;
+  return {
+    mechanism: "llm",
+    tool,
+    confidence: verdict.confidence,
+    evidence: verdict.evidence,
+    skills,
+    detail: `${tool}: injected instructions detected${skills.length > 0 ? ` (skills: ${skills.join(", ")})` : ""}.`,
+  };
 }

@@ -9,11 +9,44 @@
  * One-shot by design: connect, list, close. The auditor doesn't hold a
  * session open across the rules pass — there's no reason to, since
  * nothing after this point calls back into the server.
+ *
+ * Timeouts (Phase 3): connect and listTools get separate timeouts —
+ * the MCP SDK's `RequestOptions.timeout` accepts one per call, on both
+ * `client.connect()` and `client.listTools()` — because "the process
+ * never came up" and "the process is up but tools/list hangs" are
+ * different failures worth distinguishing, same reasoning as
+ * llm/classify.ts's connect/response split. No retry here: unlike an
+ * HTTP status code, nothing in a spawn failure or a stdio handshake
+ * says "try again" the way a 429 does — see retry.ts's header for why
+ * that project's retry policy is deliberately status-code-scoped, not
+ * "retry anything that looks transient."
+ *
+ * Errors are mapped to SlowError/RefusingError/MalformedError
+ * (errors.ts) rather than left as raw McpError/ZodError — confirmed
+ * empirically (not assumed) that a nonexistent command surfaces as
+ * `McpError` code `ConnectionClosed`, the same code a genuine timeout
+ * or dropped connection produces, so both land as SlowError. Any other
+ * McpError is the server responding with a real JSON-RPC error, on
+ * purpose — RefusingError. A response that parses as JSON-RPC but
+ * doesn't match the expected tool-list shape is MalformedError.
  */
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { McpError, ErrorCode } from "@modelcontextprotocol/sdk/types.js";
 import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
+import { z } from "zod";
+import { SlowError, RefusingError, MalformedError, type ClassifiedError } from "../errors.js";
+
+// A local subprocess handshake and an in-process tools/list call should
+// both be fast; there's no network round-trip to justify the MCP SDK's
+// own 60s default (protocol.ts's DEFAULT_REQUEST_TIMEOUT_MSEC, sized for
+// a general-purpose remote server). Kept separate, not because either
+// value is large, but because a server that spawns fine and then hangs
+// specifically on tools/list is a distinct, diagnosable failure from one
+// that never comes up at all.
+const CONNECT_TIMEOUT_MS = 10_000;
+const LIST_TOOLS_TIMEOUT_MS = 15_000;
 
 /** JSON Schema fragment for a single input parameter — the subset the rules inspect. */
 export interface ParameterSchema {
@@ -63,12 +96,36 @@ export async function listAuditedTools(target: StdioServerTarget): Promise<Audit
   const client = new Client({ name: "mcp-auditor", version: "0.1.0" });
 
   try {
-    await client.connect(transport);
-    const { tools } = await client.listTools();
+    await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS });
+    const { tools } = await client.listTools(undefined, { timeout: LIST_TOOLS_TIMEOUT_MS });
     return tools.map(toAuditedTool);
+  } catch (error) {
+    throw toClassifiedError(error);
   } finally {
     await client.close();
   }
+}
+
+function toClassifiedError(error: unknown): ClassifiedError {
+  if (error instanceof z.ZodError) {
+    return new MalformedError("listAuditedTools: server response did not match the expected shape", {
+      cause: error,
+    });
+  }
+  if (error instanceof McpError) {
+    // ConnectionClosed and RequestTimeout both mean "nothing usable came
+    // back" — confirmed empirically that a nonexistent spawn command
+    // also surfaces as ConnectionClosed, not a distinct error shape.
+    if (error.code === ErrorCode.ConnectionClosed || error.code === ErrorCode.RequestTimeout) {
+      return new SlowError("listAuditedTools: server did not respond in time", { cause: error });
+    }
+    // Any other McpError is the server responding with a real JSON-RPC
+    // error, on purpose.
+    return new RefusingError(`listAuditedTools: server refused (${error.code})`, {
+      cause: error,
+    });
+  }
+  return new MalformedError("listAuditedTools: unexpected failure", { cause: error });
 }
 
 function toAuditedTool(tool: McpTool): AuditedTool {
