@@ -28,11 +28,11 @@ npm run eval            # Phase 4: precision / recall / disagreement rate
 npm run audit           # the full LangGraph pipeline, interactive
 ```
 
-`npm run audit` pauses for your approval (`y`/`N`) before invoking any flagged tool for real. Add `--out report.txt` to save the report, `--thread <name>` to make the run resumable — rerunning with the same thread after a kill picks up where it left off instead of starting over.
+`npm run audit` pauses for your approval (`y`/`N`) before invoking any flagged tool for real. Add `--out report.txt` to save the report, `--thread <name>` to make the run resumable — rerunning an interrupted thread picks up where it left off. A completed thread cannot be reused; choose a new thread name for each new audit.
 
 To audit another stdio server, put auditor options first and the server command last: `npm run audit -- --thread filesystem-demo --target npx -y @modelcontextprotocol/server-filesystem C:\path\to\audit`. Everything after the `--target` command is passed to that server; without `--target`, the bundled fixture is used.
 
-Captured runs, no setup needed: [eval/example-report.txt](eval/example-report.txt) (a full audit) and [eval/kill-resume.txt](eval/kill-resume.txt) (a real kill-and-resume).
+Captured runs, no setup needed: [eval/example-report.html](eval/example-report.html) (the visual report), [eval/example-report.txt](eval/example-report.txt) (plain text), and [eval/kill-resume.txt](eval/kill-resume.txt) (a real kill-and-resume).
 
 ## 📐 Architecture
 
@@ -91,6 +91,7 @@ mcp-auditor/
 ├── eval/
 │   ├── run.ts                 # 10 runs x 11 tools, precision/recall/disagreement
 │   ├── results.md              # full writeup, every phase, incl. what's wrong
+│   ├── example-report.html
 │   ├── example-report.txt
 │   └── kill-resume.txt
 ├── PLAN.md                    # the five-phase build plan
