@@ -27,6 +27,16 @@
 # starting from the "Resuming a prior run" line through the final
 # report (all 6 tools approved this time, so the deep probe shows real
 # observed output).
+#
+# One number that looks like a discrepancy against eval/example-report.txt
+# but isn't: this run's report shows 2 llm findings, that one shows 3.
+# Same fixture, different runs — read_user_settings's classify call
+# failed here (see this file's own "Errors" section: "classify failed
+# (malformed)"), so it's missing from the llm findings the same way
+# any recorded failure would be. Not a different fixture, not a bug in
+# either file — this is the model instability eval/results.md's
+# disagreement-rate metric exists to measure, showing up in the wild
+# rather than in a controlled 10-run batch.
 
 thread "kill-demo-final", checkpoint db "C:\Users\adidi\OneDrive\Documents\GitHub\mcp-auditor/.mcp-auditor-checkpoints.sqlite"
 Resuming a prior run — found 6 pending step(s) on disk.
