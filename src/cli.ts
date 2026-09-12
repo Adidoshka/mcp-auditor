@@ -26,6 +26,8 @@ import { writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { Command } from "@langchain/langgraph";
 import { buildAuditGraph } from "./graph/graph.js";
+import { formatReportHtml, type ProbeResult } from "./report.js";
+import type { Finding } from "./findings.js";
 
 // node:readline/promises's question(), called repeatedly, stalls
 // forever on the second call against piped (non-TTY) stdin — confirmed
@@ -111,7 +113,17 @@ async function main() {
 
   console.log("\n" + (result.report as string));
   if (outPath !== undefined) {
-    writeFileSync(outPath, result.report as string);
+    // Format is picked from --out's own extension, not a separate flag —
+    // one output path, one obvious format. Anything but .html stays the
+    // same plain text formatReport already produced above.
+    const content = outPath.toLowerCase().endsWith(".html")
+      ? formatReportHtml(
+          (result.findings as Finding[] | undefined) ?? [],
+          (result.probes as ProbeResult[] | undefined) ?? [],
+          (result.errors as string[] | undefined) ?? [],
+        )
+      : (result.report as string);
+    writeFileSync(outPath, content);
     console.log(`\nReport also written to ${outPath}`);
   }
   stdinInterface.close();
