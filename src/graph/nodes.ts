@@ -130,12 +130,18 @@ export function buildNodes(target: StdioServerTarget) {
     }) as boolean;
 
     if (!approved) {
-      const result: ProbeResult = { tool: tool.name, args, approved: false };
+      const result: ProbeResult = { tool: tool.name, description: tool.description, args, approved: false };
       return { probes: [result] };
     }
 
     const observed = await callToolSemaphore.run(() => callTool(target, tool.name, args));
-    const result: ProbeResult = { tool: tool.name, args, approved: true, observed };
+    const result: ProbeResult = {
+      tool: tool.name,
+      description: tool.description,
+      args,
+      approved: true,
+      observed,
+    };
     return { probes: [result] };
   }
 
