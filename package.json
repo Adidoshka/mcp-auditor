@@ -10,9 +10,10 @@
     "build": "tsc -p ."
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.125.0",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "zod": "^4.6.1"
+    "openai": "^7.15.0",
+    "zod": "^4.6.1",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
     "@types/node": "^22.20.2",
