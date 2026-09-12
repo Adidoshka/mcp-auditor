@@ -68,7 +68,7 @@ export function formatReport(
   if (errors.length > 0) {
     lines.push(`## Errors (${errors.length})`);
     lines.push(
-      "One tool's failure doesn't drop the rest of the run — recorded here rather than silently omitted.",
+      "One tool's classify failure doesn't drop the rest of the run — recorded here rather than silently omitted.",
     );
     for (const error of errors) lines.push(`- ${error}`);
     lines.push("");
@@ -324,7 +324,7 @@ function renderErrorsSection(errors: readonly string[]): string {
   const items = errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("\n");
   return `<section class="errors-section">
     <h2>Errors <span class="count">(${errors.length})</span></h2>
-    <p class="errors-caption">One tool's failure doesn't drop the rest of the run.</p>
+    <p class="errors-caption">One tool's classify failure doesn't drop the rest of the run.</p>
     <ul>${items}</ul>
   </section>`;
 }

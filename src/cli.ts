@@ -11,7 +11,7 @@
  * prove state persisted" — not a claim, a tested one.
  *
  * Usage:
- *   npx tsx src/cli.ts [--thread <id>] [--db <path>] [--out <path>] [--target <command> [...args]]
+ *   npx tsx src/cli.ts [--thread <id>] [--db <path>] [--out <path>]
  *
  * Default thread id is stable ("default") so re-running without
  * --thread naturally continues an interrupted prior run; pass a new
@@ -28,7 +28,6 @@ import { Command } from "@langchain/langgraph";
 import { buildAuditGraph } from "./graph/graph.js";
 import { formatReportHtml, type ProbeResult } from "./report.js";
 import type { Finding } from "./findings.js";
-import type { StdioServerTarget } from "./mcp/client.js";
 
 // node:readline/promises's question(), called repeatedly, stalls
 // forever on the second call against piped (non-TTY) stdin — confirmed
@@ -46,34 +45,16 @@ async function nextLine(): Promise<string> {
 
 const REPO_ROOT = process.cwd();
 
-interface CliOptions {
-  threadId: string;
-  dbPath: string;
-  outPath: string | undefined;
-  target: StdioServerTarget;
-}
-
-function parseArgs(argv: string[]): CliOptions {
+function parseArgs(argv: string[]): { threadId: string; dbPath: string; outPath: string | undefined } {
   let threadId = "default";
   let dbPath = `${REPO_ROOT}/.mcp-auditor-checkpoints.sqlite`;
   let outPath: string | undefined;
-  let target: StdioServerTarget = {
-    command: "npx",
-    args: ["tsx", "target-server/server.ts"],
-    cwd: REPO_ROOT,
-  };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--thread" && argv[i + 1] !== undefined) threadId = argv[++i]!;
     if (argv[i] === "--db" && argv[i + 1] !== undefined) dbPath = argv[++i]!;
     if (argv[i] === "--out" && argv[i + 1] !== undefined) outPath = argv[++i]!;
-    if (argv[i] === "--target") {
-      const command = argv[i + 1];
-      if (command === undefined) throw new Error("--target requires a command");
-      target = { command, args: argv.slice(i + 2), cwd: REPO_ROOT };
-      break;
-    }
   }
-  return { threadId, dbPath, outPath, target };
+  return { threadId, dbPath, outPath };
 }
 
 interface PendingInterrupt {
@@ -95,7 +76,8 @@ async function promptForApprovals(pending: PendingInterrupt[]): Promise<Record<s
 }
 
 async function main() {
-  const { threadId, dbPath, outPath, target } = parseArgs(process.argv.slice(2));
+  const { threadId, dbPath, outPath } = parseArgs(process.argv.slice(2));
+  const target = { command: "npx", args: ["tsx", "target-server/server.ts"], cwd: REPO_ROOT };
   const graph = buildAuditGraph(target, dbPath);
   const config = { configurable: { thread_id: threadId } };
 
@@ -148,7 +130,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  stdinInterface.close();
   console.error(err);
   process.exitCode = 1;
 });

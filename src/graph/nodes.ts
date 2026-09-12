@@ -134,21 +134,15 @@ export function buildNodes(target: StdioServerTarget) {
       return { probes: [result] };
     }
 
-    try {
-      const observed = await callToolSemaphore.run(() => callTool(target, tool.name, args));
-      const result: ProbeResult = {
-        tool: tool.name,
-        description: tool.description,
-        args,
-        approved: true,
-        observed,
-      };
-      return { probes: [result] };
-    } catch (error) {
-      const kind = (error as { kind?: string }).kind ?? "unknown";
-      const message = error instanceof Error ? error.message : String(error);
-      return { errors: [`${tool.name}: probe failed (${kind}): ${message}`] };
-    }
+    const observed = await callToolSemaphore.run(() => callTool(target, tool.name, args));
+    const result: ProbeResult = {
+      tool: tool.name,
+      description: tool.description,
+      args,
+      approved: true,
+      observed,
+    };
+    return { probes: [result] };
   }
 
   function report(state: { findings: Finding[]; probes: ProbeResult[]; errors: string[] }) {
