@@ -13,6 +13,7 @@ This is a portfolio project. It is being built to be **explained**, not just to 
 - TypeScript
 - MCP TypeScript SDK
 - LangGraph (JS) — added in Phase 5, not before
+- Classifier model: `openai/gpt-oss-20b`, served via NVIDIA NIM's OpenAI-compatible endpoint (`https://integrate.api.nvidia.com/v1`, key in `NVIDIA_API_KEY`) — not Anthropic. Switched off Claude when the Anthropic account ran out of credit; landed here after two other picks didn't pan out (`meta/llama-3.3-70b-instruct` isn't in this NIM account's catalog, `nvidia/llama-3.1-nemotron-70b-instruct` is listed but 404s — account access not granted). Right-sized for a short repeated classification either way; full story in `classify.ts`'s header and `eval/results.md`.
 - No web UI
 
 ## Hard constraints
@@ -27,9 +28,13 @@ These are the rules that make the project's argument work. Don't break them for 
 
 4. **The LLM node has exactly one job:** decide whether a tool description contains instructions aimed at the reading agent. It does not classify severity, does not label capabilities, does not write the report. If a new job appears, that's a signal to reach for a rule.
 
-5. **Retry policy is explicit and status-code aware.** Retry with exponential backoff on 429 and 5xx. Never retry 4xx. Timeouts are set per call, separately from connection timeouts.
+5. **The classifier sees the description only** — not the schema, not the tool name. Rules read structure; the model reads text. Mixing the inputs blurs which mechanism produced a finding.
 
-6. **`ground-truth.yaml` is never edited to match the classifier's output.** It's the labels. If the classifier disagrees, that's a result, not a bug in the labels.
+6. **Retry policy is explicit and status-code aware.** Retry with exponential backoff on 429 and 5xx. Never retry 4xx. Timeouts are set per call, separately from connection timeouts.
+
+7. **`ground-truth.yaml` is never edited to match the classifier's output.** It's the labels. If the classifier disagrees, that's a result, not a bug in the labels.
+
+8. **Self-checks are not verification.** If you draft something and then grade it against your own draft, say so plainly — that shows internal consistency, not correctness. It never goes into `results.md` framed as validation.
 
 ## Build order
 
@@ -37,17 +42,23 @@ Phases run in the order in `PLAN.md`. Don't skip ahead — particularly, don't s
 
 When starting a session, work on **one phase at a time**. Ask which phase before making changes across several.
 
-## Things I write myself
+## Things I decide
 
-Do not generate these; ask me for them if they're missing:
+These are the calls I'll be asked about in the presentation, so the reasoning has to be mine. **Drafting them is fine — deciding them silently isn't.** When one comes up: propose a version, lay out the alternatives you rejected and why, and wait for me to accept or change it. Don't write it into a file until I've said go.
 
-- The subtle injection in `target-server/server.ts`
-- The capability labeling rules in `rules/capability.ts`
-- The definition of "injection" in the prompt
-- The retry policy values and status-code handling
-- The graph's edges and routing conditions in Phase 5
+| Decision | Status |
+| --- | --- |
+| The subtle injection in `target-server/server.ts` | done — `compile_account_summary` |
+| Capability labeling rules in `rules/capability.ts` | done — schema shape first, name second, description never |
+| The definition of "injection" in `prompts/v1.md` | done — addressee framing ("descriptions describe; injections advise") plus a deletion test, as the definition itself; bullets/examples are illustrations only |
+| Retry policy values and status-code handling | open (Phase 3) |
+| The graph's edges and routing conditions | open (Phase 5) |
 
 Boilerplate around these is fine to generate — the decisions inside them aren't.
+
+## Reporting
+
+End any turn that touches files with a plain list of what changed, file by file, one clause each. Keep it alongside the explanation, not instead of it.
 
 ## Style
 
@@ -59,4 +70,10 @@ Boilerplate around these is fine to generate — the decisions inside them aren'
 
 ## Current phase
 
-Phase 0 — target server and ground truth.
+**Phase 2** — LLM node and skills.
+
+Done: Phase 0 (10-tool target server + ground truth), Phase 1 (client, schema rules, capability labeling and chain detection — 8 findings, 0 model calls), the LLM node itself (`classify.ts` + `prompts/v1.md`, sanity-checked against `ground-truth.yaml` — 9/10 first pass, both planted injections caught; see `eval/results.md`'s Phase 2 section).
+
+In progress: skills playbooks (not started yet).
+
+Not started: Phase 3 (retry/timeout/concurrency), Phase 4 (eval), Phase 5 (LangGraph).
