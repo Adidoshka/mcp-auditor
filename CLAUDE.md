@@ -70,10 +70,10 @@ End any turn that touches files with a plain list of what changed, file by file,
 
 ## Current phase
 
-**Phase 4** — evaluation.
+**Phase 4** — evaluation, in progress.
 
-Done: Phase 0 (10-tool target server + ground truth, extended to 11 in Phase 2), Phase 1 (client, schema rules, capability labeling and chain detection), Phase 2 (the LLM node, `prompts/v1.md`, both skill playbooks, the fixture extension), Phase 3 (`errors.ts`, `retry.ts`, `concurrency.ts`, wired into `classify.ts` and `mcp/client.ts`, all verified against real behavior — including pointing the auditor at `@modelcontextprotocol/server-filesystem`, a real server neither of us wrote, which surfaced a real false positive in `hasSinkShape` rather than just confirming the plumbing didn't hang). Full story for each phase in `eval/results.md`.
+Done: Phase 0 (10-tool target server + ground truth, extended to 11 in Phase 2), Phase 1, Phase 2, Phase 3 (see `eval/results.md`), and Phase 4's first experiment: `InjectionVerdictSchema` reordered to `evidence`, `verdict`, `confidence` (was `verdict` first) after the v1 baseline showed `compile_account_summary` quoting the same sentence and reaching different conclusions across runs — confirmed premature commitment, not confusion about the text. Result: recall 90%→93.3%, disagreement rate unchanged at 9.1% (still that one tool, now 8/10 instead of 7/10) — a real, partial improvement, not a cure. Both runs' raw data kept (`eval/run-v1-original-schema.json`, `eval/run-v1.json`).
 
-In progress: Phase 4's eval loop.
+In progress: whether to also write `v2.md` targeting the remaining scope-of-function judgment issue — not yet decided, per "Things I decide."
 
 Not started: Phase 5 (LangGraph).

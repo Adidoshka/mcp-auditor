@@ -13,9 +13,9 @@
  * exactly what CLAUDE.md's per-finding mechanism tag exists to keep
  * visible.
  *
- * The rubric this applies lives in prompts/v1.md, loaded from disk —
- * never inlined, so Phase 4 can diff v1 against v2 as separate,
- * versioned files rather than a code diff.
+ * The rubric this applies lives in prompts/{v1,v2}.md, loaded from
+ * disk by version (default "v1") — never inlined, so Phase 4 can diff
+ * v1 against v2 as separate, versioned files rather than a code diff.
  *
  * `classifyDescription`'s optional `skills` are the one disclosed
  * exception to "description only": which skill(s) apply to a tool is
@@ -106,7 +106,10 @@ import { withRetry, isRetryableStatus } from "../retry.js";
 import { SlowError, RefusingError, MalformedError, type ClassifiedError } from "../errors.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROMPT_PATH = join(__dirname, "prompts", "v1.md");
+const PROMPTS_DIR = join(__dirname, "prompts");
+
+/** Versioned prompt files under prompts/ — per CLAUDE.md constraint 2, separable artifacts Phase 4 can diff. */
+export type PromptVersion = "v1" | "v2";
 
 // See the file header for why this is an NVIDIA NIM-hosted open model
 // rather than a Claude one, and why gpt-oss-20b specifically (Nemotron
@@ -126,24 +129,40 @@ const NIM_BASE_URL = "https://integrate.api.nvidia.com/v1";
 const CONNECT_TIMEOUT_MS = 5_000;
 const PER_CALL_TIMEOUT_MS = 30_000;
 
+// Field order is a deliberate structural choice, not incidental —
+// evidence before verdict before confidence. Under structured JSON
+// output, the model generates fields in schema-declaration order, so
+// this order previously asked for a verdict before any reasoning had
+// been written down. Motivated by a confirmed pattern in eval/run.ts's
+// v1 baseline: all 3 of compile_account_summary's 10/10 wrong runs
+// quoted the identical sentence and described it correctly as advice —
+// "states a common practice... does not direct the agent" — yet still
+// landed on not_injected, while 7/10 runs quoting the same sentence
+// called it injected. That's not confusion about what the text says;
+// it's a different conclusion from the same observation, which is what
+// committing to a verdict before writing the reasoning that should
+// produce one looks like. Tested in isolation from any v1.md wording
+// change on purpose — see eval/results.md's Phase 4 section for why a
+// structural fix and a wording fix run together would leave the result
+// unable to say which one mattered.
 const InjectionVerdictSchema = z.object({
+  evidence: z
+    .string()
+    .describe(
+      "The specific phrase or sentence in the description this judgment centers on. Empty string if none is relevant.",
+    ),
   verdict: z
     .enum(["injected", "not_injected"])
     .describe(
       "Whether the description contains instructions aimed at the reading agent, per the definition given.",
     ),
   confidence: z.number().min(0).max(1).describe("Confidence in the verdict, from 0 to 1."),
-  evidence: z
-    .string()
-    .describe(
-      "The specific phrase or sentence the verdict rests on. Empty string if verdict is not_injected.",
-    ),
 });
 
 export interface InjectionVerdict {
+  evidence: string;
   verdict: "injected" | "not_injected";
   confidence: number;
-  evidence: string;
 }
 
 // Converted once at module load, not per call — the schema is static.
@@ -158,14 +177,15 @@ const injectionVerdictJsonSchema = zodToJsonSchema(InjectionVerdictSchema, {
   target: "openApi3",
 });
 
-let cachedPrompt: string | undefined;
+const promptCache = new Map<PromptVersion, string>();
 
-/** Loads the injection rubric from disk. Never inlined — see the file header and CLAUDE.md. */
-function loadPrompt(): string {
-  if (cachedPrompt === undefined) {
-    cachedPrompt = readFileSync(PROMPT_PATH, "utf-8");
-  }
-  return cachedPrompt;
+/** Loads a versioned injection rubric from disk. Never inlined — see the file header and CLAUDE.md. */
+function loadPrompt(version: PromptVersion): string {
+  const cached = promptCache.get(version);
+  if (cached !== undefined) return cached;
+  const text = readFileSync(join(PROMPTS_DIR, `${version}.md`), "utf-8");
+  promptCache.set(version, text);
+  return text;
 }
 
 const client = new OpenAI({
@@ -207,6 +227,8 @@ export interface ClassifyOptions {
    * decides that; it just doesn't block it.
    */
   temperature?: number;
+  /** Which prompts/*.md to load as the system rubric. Defaults to "v1" — Phase 4's v1-vs-v2 comparison is the caller with a reason to pass "v2". */
+  promptVersion?: PromptVersion;
 }
 
 /**
@@ -229,8 +251,10 @@ export async function classifyDescription(
   description: string,
   options: ClassifyOptions = {},
 ): Promise<InjectionVerdict> {
-  const { skills = [], temperature } = options;
-  const systemPrompt = [loadPrompt(), ...skills.map(loadSkillText)].join("\n\n---\n\n");
+  const { skills = [], temperature, promptVersion = "v1" } = options;
+  const systemPrompt = [loadPrompt(promptVersion), ...skills.map(loadSkillText)].join(
+    "\n\n---\n\n",
+  );
 
   try {
     const response = await withRetry(
