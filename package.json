@@ -7,10 +7,14 @@
   "scripts": {
     "target-server": "tsx target-server/server.ts",
     "eval": "tsx eval/run.ts",
+    "audit": "tsx src/cli.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p ."
   },
   "dependencies": {
+    "@langchain/core": "^1.2.11",
+    "@langchain/langgraph": "^1.4.15",
+    "@langchain/langgraph-checkpoint-sqlite": "^1.0.4",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "openai": "^7.15.0",
     "undici": "^8.10.2",

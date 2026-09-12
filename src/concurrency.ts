@@ -1,15 +1,20 @@
 /**
- * concurrency.ts — bounded concurrency for a batch of async calls.
+ * concurrency.ts — bounded concurrency, two shapes.
  *
  * Per PLAN.md's Phase 3 bullet list: "bounded concurrency (semaphore,
- * limit ~4)". Nothing in this project calls it yet — classify.ts's own
- * classifyDescription is a single call, so there's nothing for it to
- * bound on its own. This exists for Phase 4's eval loop (10 runs ×
- * every tool, potentially in flight together), which is the first
- * caller that actually fires off many of these calls at once. Built
- * now anyway, deterministic and unit-testable on its own, rather than
- * inlined into eval/run.ts later where it'd be harder to see on its
- * own terms.
+ * limit ~4)". `mapWithConcurrency` covers the batch case — one caller
+ * with the whole list up front (eval/run.ts's 110 calls). `Semaphore`
+ * covers the other shape, needed once Phase 5's graph existed: LangGraph's
+ * Send-based fan-out dispatches one node invocation per tool with no
+ * caller holding the full list, and — confirmed by reading Pregel's
+ * source, not assumed — the `maxConcurrency` RunnableConfig field it
+ * inherits from @langchain/core is never actually read by the graph's
+ * own execution loop, so it does nothing here despite looking like the
+ * obvious knob. A shared semaphore that each independent node
+ * invocation acquires around its own classifyDescription call is what
+ * actually throttles it. Found this the hard way: an unthrottled 11-way
+ * fan-out produced a real connection timeout against NIM on the first
+ * live run.
  */
 
 /**
@@ -70,3 +75,51 @@ export async function mapWithConcurrency<T, R>(
  * sustained 429s rather than occasional ones.
  */
 export const DEFAULT_CONCURRENCY_LIMIT = 4;
+
+/**
+ * A classic counting semaphore: `run(fn)` waits for a free slot, then
+ * runs `fn`, then frees the slot regardless of success or failure.
+ * Unlike `mapWithConcurrency`, callers don't need to know the full set
+ * of work up front or share a call site — any number of independent
+ * callers holding a reference to the same instance are throttled
+ * together, which is what a shared module-level instance gives
+ * graph/nodes.ts's per-tool node functions, each invoked separately
+ * by LangGraph's own runtime rather than by one caller iterating a list.
+ */
+export class Semaphore {
+  private available: number;
+  private readonly queue: Array<() => void> = [];
+
+  constructor(limit: number) {
+    if (limit < 1) throw new RangeError(`Semaphore: limit must be >= 1, got ${limit}`);
+    this.available = limit;
+  }
+
+  private acquire(): Promise<void> {
+    if (this.available > 0) {
+      this.available--;
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      this.queue.push(() => {
+        this.available--;
+        resolve();
+      });
+    });
+  }
+
+  private release(): void {
+    this.available++;
+    const next = this.queue.shift();
+    if (next !== undefined) next();
+  }
+
+  async run<T>(fn: () => Promise<T>): Promise<T> {
+    await this.acquire();
+    try {
+      return await fn();
+    } finally {
+      this.release();
+    }
+  }
+}

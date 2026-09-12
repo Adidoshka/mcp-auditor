@@ -397,3 +397,64 @@ actual wording — is still open, not made here. The two-experiment
 sequence rather than one combined change is itself worth keeping in
 the writeup: had both been changed together and recall had improved,
 there'd be no way to say which one did it.
+
+## Phase 5 — LangGraph orchestration, real deep probe, kill-and-resume
+
+Full design (state shape, node responsibilities, the routing condition
+and why it's kept exactly as literally stated) lives in
+`graph/*.ts`'s own header comments. Two results worth recording here.
+
+### The routing condition flags most of the server, and that's disclosed, not tightened
+
+"Chain-finding source, or injected verdict" routes 6 of 11 tools to
+the deep branch on this fixture. Checked whether that's a fixture
+quirk: applying the identical rule to Phase 3's real
+`@modelcontextprotocol/server-filesystem` findings routes 7 of 14.
+Not a coincidence — `findCapabilityChains` is a deliberate full cross
+product (every source × every sink), so any server with at least one
+write-capable tool flags most of its readers this way. Every
+tightening considered needs a confidence/exploitability field
+`capability.ts` doesn't have, which is a different reserved decision
+than this one. Kept as stated.
+
+### Kill-and-resume, run for real through the CLI
+
+Mechanics were verified in isolation first (multiple simultaneous
+`interrupt()` calls, keyed resume by interrupt id, a genuinely
+separate process discovering pending interrupts from the SQLite
+checkpoint alone), then run for real: `npx tsx src/cli.ts` started,
+run through `listTools`, all 11 `analyzeTool` classify calls,
+`collect`, and all 6 `deepProbe` interrupts firing, 2 of 6 approval
+prompts answered for real, then the actual `node.exe` process killed
+(`taskkill /F`) mid-approval-loop — not a clean shutdown. A second,
+genuinely separate process, same `--thread`, reached the same prompt
+**5 seconds** later, correctly reporting "Resuming a prior run — found
+6 pending step(s) on disk." `classifyDescription` itself measures
+9.0s mean per call; 5 seconds isn't enough time for even the fastest
+call observed anywhere in this project, let alone the eleven the
+first pass needed. Full unedited terminal output of the resumed
+process: `eval/kill-resume.txt`. A real example report (all 6 tools
+approved, real observed output from each) is at
+`eval/example-report.txt`, generated via `cli.ts`'s `--out` flag.
+
+### Four real bugs, found by running it rather than reading the docs
+
+- Node name and state-field name share a namespace — naming both
+  `"report"` was rejected outright at graph-build time.
+- LangGraph's `maxConcurrency` `RunnableConfig` option is never read
+  by Pregel's own execution loop (confirmed by reading
+  `node_modules/@langchain/langgraph/src/pregel/*.ts`, not assumed).
+  An unthrottled 11-way `Send` fan-out produced a real
+  `APIConnectionTimeoutError` against NIM on the first live run — fixed
+  with a real `Semaphore` in `concurrency.ts`, shared across every
+  `analyzeTool`/`deepProbe` invocation in the process.
+- `node:readline/promises`'s `question()`, called in a loop, stalls
+  forever on its second call against piped (non-TTY) stdin — a Node
+  bug, reproduced with a two-line minimal case, not specific to this
+  file. Fixed by driving the plain `readline` module's async iterator
+  by hand instead.
+- A malformed-JSON classify response (the decoding glitch already
+  documented in Phase 2) crashed the entire graph run until
+  `analyzeTool` got the same per-task error-resilience `eval/run.ts`
+  already had — one tool's failure is now a recorded finding-adjacent
+  error, not a lost run.

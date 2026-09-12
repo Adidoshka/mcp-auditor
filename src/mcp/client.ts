@@ -29,6 +29,17 @@
  * McpError is the server responding with a real JSON-RPC error, on
  * purpose — RefusingError. A response that parses as JSON-RPC but
  * doesn't match the expected tool-list shape is MalformedError.
+ *
+ * callTool (Phase 5): a second one-shot operation, same connect/close
+ * pattern and error mapping as listAuditedTools, added for the graph's
+ * deep-probe node — actually invoking a flagged tool with a benign
+ * argument to observe its real behavior, per capability.ts's own
+ * forward-reference to "the sandboxed probe (Phase 5)." Each call gets
+ * its own connection rather than reusing one across a run; the target
+ * servers here are cheap local mocks, and a fresh connection per call
+ * keeps this function as simple and self-contained as
+ * listAuditedTools rather than introducing session lifetime management
+ * for a modest efficiency gain.
  */
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -100,15 +111,55 @@ export async function listAuditedTools(target: StdioServerTarget): Promise<Audit
     const { tools } = await client.listTools(undefined, { timeout: LIST_TOOLS_TIMEOUT_MS });
     return tools.map(toAuditedTool);
   } catch (error) {
-    throw toClassifiedError(error);
+    throw toClassifiedError(error, "listAuditedTools");
   } finally {
     await client.close();
   }
 }
 
-function toClassifiedError(error: unknown): ClassifiedError {
+/**
+ * Invokes one tool with the given arguments and returns its result
+ * content as text (joining multiple content blocks, since the rules
+ * this feeds only need to compare against a description, not render
+ * rich content). Same timeout/error-mapping treatment as
+ * listAuditedTools — see the file header.
+ */
+export async function callTool(
+  target: StdioServerTarget,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const transport = new StdioClientTransport({
+    command: target.command,
+    args: target.args ?? [],
+    ...(target.cwd !== undefined ? { cwd: target.cwd } : {}),
+  });
+
+  const client = new Client({ name: "mcp-auditor", version: "0.1.0" });
+
+  try {
+    await client.connect(transport, { timeout: CONNECT_TIMEOUT_MS });
+    const result = await client.callTool(
+      { name: toolName, arguments: args },
+      undefined,
+      { timeout: LIST_TOOLS_TIMEOUT_MS },
+    );
+    const content = Array.isArray(result.content) ? result.content : [];
+    return content
+      .map((block: { type: string; text?: string }) =>
+        block.type === "text" ? (block.text ?? "") : `[${block.type} content]`,
+      )
+      .join("\n");
+  } catch (error) {
+    throw toClassifiedError(error, "callTool");
+  } finally {
+    await client.close();
+  }
+}
+
+function toClassifiedError(error: unknown, context: string): ClassifiedError {
   if (error instanceof z.ZodError) {
-    return new MalformedError("listAuditedTools: server response did not match the expected shape", {
+    return new MalformedError(`${context}: server response did not match the expected shape`, {
       cause: error,
     });
   }
@@ -117,15 +168,15 @@ function toClassifiedError(error: unknown): ClassifiedError {
     // back" — confirmed empirically that a nonexistent spawn command
     // also surfaces as ConnectionClosed, not a distinct error shape.
     if (error.code === ErrorCode.ConnectionClosed || error.code === ErrorCode.RequestTimeout) {
-      return new SlowError("listAuditedTools: server did not respond in time", { cause: error });
+      return new SlowError(`${context}: server did not respond in time`, { cause: error });
     }
     // Any other McpError is the server responding with a real JSON-RPC
     // error, on purpose.
-    return new RefusingError(`listAuditedTools: server refused (${error.code})`, {
+    return new RefusingError(`${context}: server refused (${error.code})`, {
       cause: error,
     });
   }
-  return new MalformedError("listAuditedTools: unexpected failure", { cause: error });
+  return new MalformedError(`${context}: unexpected failure`, { cause: error });
 }
 
 function toAuditedTool(tool: McpTool): AuditedTool {

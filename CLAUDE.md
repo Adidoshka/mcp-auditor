@@ -70,10 +70,12 @@ End any turn that touches files with a plain list of what changed, file by file,
 
 ## Current phase
 
-**Phase 4** — evaluation, in progress.
+All five phases from PLAN.md now have a working first pass — **Phase 5** just closed. What's actually open is the `v2.md` decision below, not a phase.
 
-Done: Phase 0 (10-tool target server + ground truth, extended to 11 in Phase 2), Phase 1, Phase 2, Phase 3 (see `eval/results.md`), and Phase 4's first experiment: `InjectionVerdictSchema` reordered to `evidence`, `verdict`, `confidence` (was `verdict` first) after the v1 baseline showed `compile_account_summary` quoting the same sentence and reaching different conclusions across runs — confirmed premature commitment, not confusion about the text. Result: recall 90%→93.3%, disagreement rate unchanged at 9.1% (still that one tool, now 8/10 instead of 7/10) — a real, partial improvement, not a cure. Both runs' raw data kept (`eval/run-v1-original-schema.json`, `eval/run-v1.json`).
+Done: Phase 0 (10-tool target server + ground truth, extended to 11 in Phase 2), Phase 1, Phase 2, Phase 3, Phase 4 (see `eval/results.md` — field-order fix tested in isolation: recall 90%→93.3%, disagreement rate unchanged at 9.1%, a real partial improvement not a cure). Phase 5: `graph/state.ts`, `graph/nodes.ts`, `graph/graph.ts`, `graph/probeArgs.ts`, `report.ts` (named since Phase 0, never built until now), `cli.ts`. Fan-out via `Send`, conditional routing (chain-finding sources + injected tools → deep branch — kept exactly as literally stated, not tightened, since every tightening needs a confidence field `capability.ts` doesn't have), `interrupt()` gating a real invocation (not the stubbed version PLAN.md's cut list allowed), `SqliteSaver` for durable checkpointing. Kill-and-resume run for real through the actual CLI, not just verified in isolated mechanics: process killed mid-approval-loop, a genuinely separate process resumed the same thread 5 seconds later ("Resuming a prior run — found 6 pending step(s) on disk") — too fast to have redone any of the 11 classify calls, confirming the expensive analysis phase survived the kill.
 
-In progress: whether to also write `v2.md` targeting the remaining scope-of-function judgment issue — not yet decided, per "Things I decide."
+Four real bugs found and fixed while building this, not written around: a node/state name collision LangGraph rejected outright; LangGraph's `maxConcurrency` config option is never actually read by Pregel's own execution loop (confirmed by reading the source) — an unthrottled fan-out produced a real NIM connection timeout, fixed with a proper `Semaphore` in `concurrency.ts`; `node:readline/promises`'s `question()` stalls forever on its second call against piped stdin (a Node bug, not this code); a malformed-JSON classify response was crashing the whole graph run until `analyzeTool` got the same per-task error-resilience `eval/run.ts` already had.
 
-Not started: Phase 5 (LangGraph).
+In progress: whether to write `v2.md` targeting the remaining scope-of-function judgment issue in `compile_account_summary` — not yet decided, per "Things I decide."
+
+Not started: nothing from PLAN.md's five phases. The cut-list sandboxed-probe item was *not* cut — built for real per an explicit decision to do so.
