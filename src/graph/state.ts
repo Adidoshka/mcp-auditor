@@ -37,13 +37,7 @@ export const AuditState = new StateSchema({
     inputSchema: z.array(probeResult),
     reducer: (current, next) => [...current, ...next],
   }),
-  /**
-   * Per-tool classify failures (SlowError/RefusingError/MalformedError,
-   * even after retry.ts's retries) — recorded, not silently dropped,
-   * same principle eval/run.ts's error-outcome tracking already
-   * established. A malformed response from one tool's classification
-   * call shouldn't lose the rest of an audit run.
-   */
+  /** Per-tool classify and probe failures, recorded without dropping the rest of the run. */
   errors: new ReducedValue(z.array(z.string()).default(() => []), {
     inputSchema: z.array(z.string()),
     reducer: (current, next) => [...current, ...next],

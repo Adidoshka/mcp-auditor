@@ -15,7 +15,7 @@ A CLI that audits an MCP server's exposed tools for risks to the **agent** conne
 - **Capability chains** — two harmless tools where one's output could feed the other's input (a reader, and something that sends data out)
 - **Overbroad parameters** — a schema that accepts more than the tool's job requires
 
-**The argument:** everything decidable from a tool's schema and name is deterministic code — zero model calls. The model is asked one narrow question per tool: does this description contain instructions aimed at the agent? It never labels capabilities, judges severity, or writes the report.
+**The argument:** everything decidable from a tool's schema and name is deterministic code — zero model calls. The model is asked one narrow question per tool: does this description contain instructions aimed at the agent? The description is the only text being judged; which guidance the model gets alongside it is selected deterministically from schema and name.
 
 ## 🚀 Quick Start
 
@@ -29,6 +29,8 @@ npm run audit           # the full LangGraph pipeline, interactive
 ```
 
 `npm run audit` pauses for your approval (`y`/`N`) before invoking any flagged tool for real. Add `--out report.txt` to save the report, `--thread <name>` to make the run resumable — rerunning with the same thread after a kill picks up where it left off instead of starting over.
+
+To audit another stdio server, put auditor options first and the server command last: `npm run audit -- --thread filesystem-demo --target npx -y @modelcontextprotocol/server-filesystem C:\path\to\audit`. Everything after the `--target` command is passed to that server; without `--target`, the bundled fixture is used.
 
 Captured runs, no setup needed: [eval/example-report.txt](eval/example-report.txt) (a full audit) and [eval/kill-resume.txt](eval/kill-resume.txt) (a real kill-and-resume).
 
@@ -59,7 +61,7 @@ src/rules/            src/llm/classify.ts
 
 1. **List** — connect over stdio, `tools/list`, close.
 2. **Rules** — schema + capability checks on every tool, zero model calls.
-3. **Classify** — one model call per tool, description text only.
+3. **Classify** — one model call per tool; the description is judged using guidance selected deterministically from schema and name.
 4. **Collect** — flags any chain source, or any LLM-injected tool.
 5. **Deep probe** — on approval only, actually invokes a flagged tool to see what it does.
 6. **Report** — findings grouped by the mechanism that produced them.
@@ -140,7 +142,7 @@ The schema rule's low precision is load-bearing: both injections sit on tools wh
 | Classifier timeout | 5s connect / 30s per call |
 | MCP timeout | 10s connect / 15s `tools/list` |
 | Concurrency | 4 (shared `Semaphore`) |
-| CLI flags | `--thread <id>` (resume), `--db <path>` (checkpoint file), `--out <path>` (save report) |
+| CLI flags | `--thread <id>` (resume), `--db <path>` (checkpoint file), `--out <path>` (save report), `--target <command> [...args]` (stdio server; must come last) |
 
 ## 📋 Phase → Topic Mapping
 
