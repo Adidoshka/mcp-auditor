@@ -48,7 +48,7 @@ function findUnconstrainedStrings(tool: AuditedTool): SchemaFinding[] {
         tool: tool.name,
         parameter: name,
         issue,
-        detail: `"${name}" is typed string with no enum constraint.`,
+        detail: `${tool.name}."${name}" is typed string with no enum constraint.`,
       });
     }
   }

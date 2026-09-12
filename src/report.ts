@@ -324,7 +324,7 @@ function renderErrorsSection(errors: readonly string[]): string {
   const items = errors.map((e) => `<li>${escapeHtml(e)}</li>`).join("\n");
   return `<section class="errors-section">
     <h2>Errors <span class="count">(${errors.length})</span></h2>
-    <p class="errors-caption">One tool's failure doesn't drop the rest of the run.</p>
+    <p class="errors-caption">One tool's failure doesn't drop the rest of the run. Classifier failures can land on different tools across otherwise identical runs.</p>
     <ul>${items}</ul>
   </section>`;
 }

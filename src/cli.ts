@@ -14,8 +14,9 @@
  *   npx tsx src/cli.ts [--thread <id>] [--db <path>] [--out <path>] [--target <command> [...args]]
  *
  * Default thread id is stable ("default") so re-running without
- * --thread naturally continues an interrupted prior run; pass a new
- * --thread to start over. --out saves the final report to a file in
+ * --thread naturally continues an interrupted prior run. Completed
+ * threads are rejected because reducer-backed state would otherwise
+ * accumulate; pass a new --thread to start another audit. --out saves the final report to a file in
  * addition to printing it — for a live demo, so the report doesn't
  * scroll off with the approval prompts, and so a committed example
  * report shows the real output to anyone browsing the repo instead of
@@ -112,6 +113,8 @@ async function main() {
       string,
       unknown
     >;
+  } else if (typeof snapshot.values.report === "string" && snapshot.values.report.length > 0) {
+    throw new Error(`Thread "${threadId}" already completed; start a new run with a new --thread value.`);
   } else {
     console.log("Starting a new run.");
     result = (await graph.invoke({}, config)) as Record<string, unknown>;
