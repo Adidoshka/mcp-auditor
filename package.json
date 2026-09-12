@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "target-server": "tsx target-server/server.ts",
-    "eval": "tsx eval/run.ts",
-    "audit": "tsx src/cli.ts",
+    "eval": "tsx --env-file=.env eval/run.ts",
+    "audit": "tsx --env-file=.env src/cli.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p ."
   },
