@@ -7,3 +7,13 @@ dist/
 *.sqlite-shm
 *.sqlite-wal
 report.txt
+
+# Local audit report runs -- kept out of git except one committed example.
+results/v1/*
+results/v2/*
+results/v3/*
+!results/v1/.gitkeep
+!results/v2/.gitkeep
+!results/v3/.gitkeep
+!results/v1/v1_example.html
+!results/v1/v1_example.txt
