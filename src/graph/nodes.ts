@@ -124,7 +124,7 @@ export function buildNodes(target: StdioServerTarget, promptVersion: PromptVersi
    */
   async function deepProbe(state: { tool: AuditedTool }) {
     const { tool } = state;
-    const args = synthesizeProbeArgs(tool);
+    const args = synthesizeProbeArgs(tool, target);
 
     const approved = interrupt({
       tool: tool.name,

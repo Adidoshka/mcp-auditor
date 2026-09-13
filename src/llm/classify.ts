@@ -77,13 +77,7 @@
  * be a reasonable landing spot on its own merits too, not just
  * availability: smaller models tend to be the best-behaved at strict
  * JSON output, which matters for a first end-to-end run where a schema
- * failure and a model-access failure would otherwise look the same.
- * deepseek-ai/deepseek-v4-pro-0813 remains the frontier-class comparison
- * point once this baseline is confirmed working — worth checking first
- * whether it 404s the same way Nemotron did, since if several models on
- * this account need access enabled individually, that shapes what the
- * comparison experiment can even run. See eval notes once Phase 4
- * exists.)
+ * failure and a model-access failure would otherwise look the same.)
  *
  * Structured output: the Zod schema is the single source of truth,
  * converted to JSON Schema for the request via zod-to-json-schema —
@@ -123,6 +117,16 @@ const PROMPTS_DIR = join(__dirname, "prompts");
 
 /** Versioned prompt files under prompts/ — per CLAUDE.md constraint 2, separable artifacts Phase 4 can diff. */
 export type PromptVersion = "v1" | "v2" | "v3";
+
+/**
+ * The runtime list matching PromptVersion, exported so cli.ts and
+ * eval/run.ts validate `--prompt-version`/argv against this instead of
+ * each hardcoding their own copy — the second copy is exactly how
+ * eval/run.ts's own check drifted out of sync when v3 was added here
+ * (it still rejected anything but "v1"/"v2" until caught and fixed).
+ * One array, kept next to the type it mirrors.
+ */
+export const PROMPT_VERSIONS: readonly PromptVersion[] = ["v1", "v2", "v3"];
 
 // See the file header for why this is an NVIDIA NIM-hosted open model
 // rather than a Claude one, and why gpt-oss-20b specifically (Nemotron
@@ -204,10 +208,8 @@ function loadPrompt(version: PromptVersion): string {
 const client = new OpenAI({
   apiKey: process.env.NVIDIA_API_KEY,
   baseURL: NIM_BASE_URL,
-  // 0, not the SDK's default of 2 — see the file header and retry.ts:
-  // the SDK's own retry logic retries 408/409 (4xx), which this
-  // project's constraint 6 forbids. Every retry that happens here goes
-  // through retry.ts's withRetry below instead.
+  // 0, not the SDK's default of 2 — routed through retry.ts's withRetry
+  // below instead; see the file header for why.
   maxRetries: 0,
   timeout: PER_CALL_TIMEOUT_MS,
   // Node's global fetch and the `undici` package are different

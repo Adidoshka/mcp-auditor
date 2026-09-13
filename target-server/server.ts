@@ -2,7 +2,7 @@
 /**
  * target-server — the fixture the auditor points at.
  *
- * Ten tools. Ground truth for all of them lives in ground-truth.yaml,
+ * Twelve tools. Ground truth for all of them lives in ground-truth.yaml,
  * not here — this file should read the way a real tool list would to
  * whoever wrote it, with no comment telling you which ones to distrust.
  *

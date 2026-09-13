@@ -20,10 +20,17 @@
 /**
  * Runs `fn` over every item in `items`, at most `limit` in flight at
  * once, preserving result order to match input order regardless of
- * which call finishes first. A failure in one call doesn't cancel the
- * others already in flight — this returns a Promise per item's outcome
- * via Promise.allSettled semantics, folded into either a value or a
- * rethrown error at the call site's discretion via the returned array.
+ * which call finishes first.
+ *
+ * Fail-fast, not fail-soft: if `fn` rejects for any item, the whole
+ * call rejects with that same error immediately (verified directly —
+ * 8 items at limit 2 with item 2 throwing rejects having only
+ * attempted items 1 and 2; the other 6 are never dispatched). There is
+ * no Promise.allSettled-style per-item resilience here. A caller that
+ * wants one item's failure recorded as an outcome rather than fatal to
+ * the whole batch has to catch inside its own `fn` — eval/run.ts does
+ * exactly that around each of its own calls, which is where that
+ * resilience actually comes from, not from this function.
  */
 export async function mapWithConcurrency<T, R>(
   items: readonly T[],

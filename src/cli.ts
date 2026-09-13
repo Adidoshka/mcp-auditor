@@ -27,12 +27,8 @@
  * the one place a person actually chooses, so it's the one place this
  * needs to be a flag rather than a hardcoded call site.
  *
- * --out resolves under results/<prompt-version>/ when given a bare
- * filename (no `/` or `\`), so a report is filed under the version
- * that produced it without having to spell out the directory every
- * time — e.g. `--out fixture.html --prompt-version v2` writes
- * `results/v2/fixture.html`. Pass a path containing a separator (e.g.
- * `./out/fixture.html`) to opt out and write exactly that path instead.
+ * --out's bare-filename handling (filed and prefixed by prompt version)
+ * is documented at resolveOutPath below, next to the code that does it.
  */
 
 import { writeFileSync, mkdirSync } from "node:fs";
@@ -43,9 +39,7 @@ import { buildAuditGraph } from "./graph/graph.js";
 import { formatReportHtml, type ProbeResult } from "./report.js";
 import type { Finding } from "./findings.js";
 import type { StdioServerTarget } from "./mcp/client.js";
-import type { PromptVersion } from "./llm/classify.js";
-
-const PROMPT_VERSIONS: readonly PromptVersion[] = ["v1", "v2", "v3"];
+import { PROMPT_VERSIONS, type PromptVersion } from "./llm/classify.js";
 
 // node:readline/promises's question(), called repeatedly, stalls
 // forever on the second call against piped (non-TTY) stdin — confirmed
@@ -103,14 +97,22 @@ function parseArgs(argv: string[]): CliOptions {
 }
 
 /**
- * A bare filename (no `/` or `\`) is filed under results/<promptVersion>/;
- * anything containing a separator is an explicit path and passes through
- * unchanged. Creates the destination directory if needed — results/v1,
- * results/v2, results/v3 aren't all guaranteed to exist yet.
+ * A bare filename (no `/` or `\`) is filed under results/<promptVersion>/
+ * with the version prefixed onto the filename itself (e.g. `fixture.html`
+ * with `--prompt-version v2` becomes `results/v2/v2_fixture.html`) — so the
+ * version is still legible if the file is later moved, opened as a bare
+ * tab, or copied out of its folder, not only encoded in the directory.
+ * Already-prefixed names aren't prefixed twice, so this stays a no-op on
+ * a name that's already `v1_...`/`v2_...`/`v3_...`. Anything containing a
+ * separator is an explicit path and passes through unchanged. Creates the
+ * destination directory if needed — results/v1, results/v2, results/v3
+ * aren't all guaranteed to exist yet.
  */
 function resolveOutPath(outPath: string, promptVersion: PromptVersion): string {
   const isBareFilename = !outPath.includes("/") && !outPath.includes("\\") && !isAbsolute(outPath);
-  const resolved = isBareFilename ? join(REPO_ROOT, "results", promptVersion, outPath) : outPath;
+  const prefix = `${promptVersion}_`;
+  const fileName = isBareFilename && !outPath.startsWith(prefix) ? `${prefix}${outPath}` : outPath;
+  const resolved = isBareFilename ? join(REPO_ROOT, "results", promptVersion, fileName) : outPath;
   mkdirSync(dirname(resolved), { recursive: true });
   return resolved;
 }

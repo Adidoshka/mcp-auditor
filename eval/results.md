@@ -506,9 +506,10 @@ call observed anywhere in this project, let alone the eleven the
 first pass needed. Full unedited terminal output of the resumed
 process: `eval/kill-resume.txt`. A real example report (all 6 tools
 approved, real observed output from each) is at
-`results/v1/example.txt`, generated via `cli.ts`'s `--out` flag (moved
-here from `eval/example-report.txt` once reports started filing under
-`results/<prompt-version>/`, since it's a v1 run).
+`results/v1/v1_example.txt`, generated via `cli.ts`'s `--out` flag
+(moved here from `eval/example-report.txt` once reports started filing
+under `results/<prompt-version>/`, version-prefixed, since it's a v1
+run).
 
 ### Four real bugs, found by running it rather than reading the docs
 

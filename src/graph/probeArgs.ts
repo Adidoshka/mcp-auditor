@@ -17,9 +17,40 @@
  *    server." A write-shaped tool's fallback probe genuinely performs
  *    that write; the interrupt() gate before invocation is what makes
  *    that acceptable, not this function refusing to try.
+ *
+ * Tier 1 used to be keyed on `tool.name` alone, with no check that the
+ * connected server was actually target-server — a real gap, not just
+ * an inaccurate comment: point `--target` at any server exposing a
+ * tool literally named `send_email_notification` and the curated
+ * recipient/subject/body would have fired against it, not a
+ * placeholder. `isTargetServerInvocation` closes that by requiring the
+ * spawn command itself to reference this project's own fixture script
+ * before tier 1 applies at all. That's still a heuristic on the
+ * command line, not a cryptographic identity check — an operator could
+ * misconfigure `--target` to spawn something else via an identically
+ * named script path — but it moves the thing being trusted from "a
+ * string the audited server chose" (its tool name, free for any server
+ * to pick) to "a string the auditor's own operator chose" (the command
+ * being audited), which is the actual trust boundary here. `interrupt()`
+ * remains the real backstop regardless of which tier fires.
  */
 
-import type { AuditedTool, ParameterSchema } from "../mcp/client.js";
+import { join, sep } from "node:path";
+import type { AuditedTool, ParameterSchema, StdioServerTarget } from "../mcp/client.js";
+
+const TARGET_SERVER_SCRIPT = join("target-server", "server.ts");
+
+/**
+ * True only when `target`'s own command line references this project's
+ * target-server/server.ts — see the file header for why this, and not
+ * the tool name being probed, is the right thing to check.
+ */
+export function isTargetServerInvocation(target: StdioServerTarget): boolean {
+  return (target.args ?? []).some((arg) => {
+    const normalized = arg.replaceAll("/", sep).replaceAll("\\", sep);
+    return normalized === TARGET_SERVER_SCRIPT || normalized.endsWith(sep + TARGET_SERVER_SCRIPT);
+  });
+}
 
 const TARGET_SERVER_PROBE_ARGS: Readonly<Record<string, Record<string, unknown>>> = {
   get_weather: { city: "london" },
@@ -42,8 +73,11 @@ const TARGET_SERVER_PROBE_ARGS: Readonly<Record<string, Record<string, unknown>>
   },
 };
 
-export function synthesizeProbeArgs(tool: AuditedTool): Record<string, unknown> {
-  const curated = TARGET_SERVER_PROBE_ARGS[tool.name];
+export function synthesizeProbeArgs(
+  tool: AuditedTool,
+  target: StdioServerTarget,
+): Record<string, unknown> {
+  const curated = isTargetServerInvocation(target) ? TARGET_SERVER_PROBE_ARGS[tool.name] : undefined;
   if (curated !== undefined) return curated;
   return synthesizeGenericArgs(tool);
 }

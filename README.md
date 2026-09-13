@@ -27,11 +27,11 @@ npm run eval            # Phase 4: precision / recall / disagreement rate
 npm run audit           # the full LangGraph pipeline, interactive
 ```
 
-`npm run audit` pauses for your approval (`y`/`N`) before invoking any flagged tool for real. Add `--out report.html` to save the report, `--prompt-version v1|v2|v3` to pick the injection rubric (default `v2`), `--thread <name>` to make the run resumable — rerunning an interrupted thread picks up where it left off. A bare `--out` filename files itself under `results/<prompt-version>/` automatically (e.g. `--out report.html --prompt-version v2` writes `results/v2/report.html`); a path containing a separator is written exactly as given instead. A completed thread cannot be reused; choose a new thread name for each new audit.
+`npm run audit` pauses for your approval (`y`/`N`) before invoking any flagged tool for real. Add `--out report.html` to save the report, `--prompt-version v1|v2|v3` to pick the injection rubric (default `v2`), `--thread <name>` to make the run resumable — rerunning an interrupted thread picks up where it left off. A bare `--out` filename files itself under `results/<prompt-version>/` automatically, version-prefixed (e.g. `--out report.html --prompt-version v2` writes `results/v2/v2_report.html`); a path containing a separator is written exactly as given instead. A completed thread cannot be reused; choose a new thread name for each new audit.
 
 To audit another stdio server, put auditor options first and the server command last: `npm run audit -- --thread filesystem-demo --target npx -y @modelcontextprotocol/server-filesystem C:\path\to\audit`. Everything after the `--target` command is passed to that server; without `--target`, the bundled fixture is used.
 
-Captured runs, no setup needed: [results/v1/example.html](results/v1/example.html) (the visual report), [results/v1/example.txt](results/v1/example.txt) (plain text), and [eval/kill-resume.txt](eval/kill-resume.txt) (a real kill-and-resume). More sample runs, by prompt version, under [results/v1/](results/v1/) and [results/v2/](results/v2/).
+Captured runs, no setup needed: [results/v1/v1_example.html](results/v1/v1_example.html) (the visual report), [results/v1/v1_example.txt](results/v1/v1_example.txt) (plain text), and [eval/kill-resume.txt](eval/kill-resume.txt) (a real kill-and-resume). More sample runs, by prompt version, under [results/v1/](results/v1/) and [results/v2/](results/v2/).
 
 ## 📐 Architecture
 

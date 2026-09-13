@@ -16,13 +16,15 @@
  * runs, not a stripped-down version of it.
  *
  * Concurrency is bounded via concurrency.ts's mapWithConcurrency — the
- * first real caller for it, per that file's own header comment. A
- * failed run (SlowError/RefusingError/MalformedError, even after
- * retry.ts's retries) is recorded as an error outcome rather than
- * crashing the batch; errors are reported, not silently dropped from
- * the denominator.
+ * first real caller for it, per that file's own header comment. That
+ * function is fail-fast on its own (see its doc comment); the try/catch
+ * around each task below, not mapWithConcurrency, is what turns a
+ * failed call (SlowError/RefusingError/MalformedError, even after
+ * retry.ts's retries) into a recorded error outcome instead of an
+ * exception that would abort the whole batch. Errors are reported, not
+ * silently dropped from the denominator.
  *
- * Usage: npx tsx eval/run.ts [v1|v2]  (default v1)
+ * Usage: npx tsx eval/run.ts [v1|v2|v3]  (default v1)
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
@@ -32,7 +34,7 @@ import { parse as parseYaml } from "yaml";
 import { listAuditedTools } from "../src/mcp/client.js";
 import { labelTool } from "../src/rules/capability.js";
 import { selectSkills } from "../src/llm/skills.js";
-import { classifyDescription, type PromptVersion } from "../src/llm/classify.js";
+import { classifyDescription, PROMPT_VERSIONS, type PromptVersion } from "../src/llm/classify.js";
 import { mapWithConcurrency, DEFAULT_CONCURRENCY_LIMIT } from "../src/concurrency.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -61,8 +63,10 @@ interface RunOutcome {
 
 async function main() {
   const promptVersion = (process.argv[2] ?? "v1") as PromptVersion;
-  if (promptVersion !== "v1" && promptVersion !== "v2") {
-    throw new Error(`eval/run.ts: unknown prompt version "${promptVersion}" (expected v1 or v2)`);
+  if (!PROMPT_VERSIONS.includes(promptVersion)) {
+    throw new Error(
+      `eval/run.ts: unknown prompt version "${promptVersion}" (expected one of ${PROMPT_VERSIONS.join(", ")})`,
+    );
   }
 
   const groundTruth = loadGroundTruth();
