@@ -11,7 +11,7 @@
  * prove state persisted" — not a claim, a tested one.
  *
  * Usage:
- *   npx tsx src/cli.ts [--thread <id>] [--db <path>] [--out <path>] [--target <command> [...args]]
+ *   npx tsx src/cli.ts [--thread <id>] [--db <path>] [--out <path>] [--prompt-version <v1|v2|v3>] [--target <command> [...args]]
  *
  * Default thread id is stable ("default") so re-running without
  * --thread naturally continues an interrupted prior run. Completed
@@ -21,15 +21,31 @@
  * scroll off with the approval prompts, and so a committed example
  * report shows the real output to anyone browsing the repo instead of
  * requiring them to run it or infer it from report.ts.
+ *
+ * --prompt-version picks which prompts/*.md the classify node runs
+ * (default "v2", matching graph/nodes.ts's own default) — the CLI is
+ * the one place a person actually chooses, so it's the one place this
+ * needs to be a flag rather than a hardcoded call site.
+ *
+ * --out resolves under results/<prompt-version>/ when given a bare
+ * filename (no `/` or `\`), so a report is filed under the version
+ * that produced it without having to spell out the directory every
+ * time — e.g. `--out fixture.html --prompt-version v2` writes
+ * `results/v2/fixture.html`. Pass a path containing a separator (e.g.
+ * `./out/fixture.html`) to opt out and write exactly that path instead.
  */
 
-import { writeFileSync } from "node:fs";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { dirname, isAbsolute, join } from "node:path";
 import { createInterface } from "node:readline";
 import { Command } from "@langchain/langgraph";
 import { buildAuditGraph } from "./graph/graph.js";
 import { formatReportHtml, type ProbeResult } from "./report.js";
 import type { Finding } from "./findings.js";
 import type { StdioServerTarget } from "./mcp/client.js";
+import type { PromptVersion } from "./llm/classify.js";
+
+const PROMPT_VERSIONS: readonly PromptVersion[] = ["v1", "v2", "v3"];
 
 // node:readline/promises's question(), called repeatedly, stalls
 // forever on the second call against piped (non-TTY) stdin — confirmed
@@ -51,6 +67,7 @@ interface CliOptions {
   threadId: string;
   dbPath: string;
   outPath: string | undefined;
+  promptVersion: PromptVersion;
   target: StdioServerTarget;
 }
 
@@ -58,6 +75,7 @@ function parseArgs(argv: string[]): CliOptions {
   let threadId = "default";
   let dbPath = `${REPO_ROOT}/.mcp-auditor-checkpoints.sqlite`;
   let outPath: string | undefined;
+  let promptVersion: PromptVersion = "v2";
   let target: StdioServerTarget = {
     command: "npx",
     args: ["tsx", "target-server/server.ts"],
@@ -67,6 +85,13 @@ function parseArgs(argv: string[]): CliOptions {
     if (argv[i] === "--thread" && argv[i + 1] !== undefined) threadId = argv[++i]!;
     if (argv[i] === "--db" && argv[i + 1] !== undefined) dbPath = argv[++i]!;
     if (argv[i] === "--out" && argv[i + 1] !== undefined) outPath = argv[++i]!;
+    if (argv[i] === "--prompt-version" && argv[i + 1] !== undefined) {
+      const value = argv[++i]!;
+      if (!PROMPT_VERSIONS.includes(value as PromptVersion)) {
+        throw new Error(`--prompt-version must be one of ${PROMPT_VERSIONS.join(", ")}, got "${value}"`);
+      }
+      promptVersion = value as PromptVersion;
+    }
     if (argv[i] === "--target") {
       const command = argv[i + 1];
       if (command === undefined) throw new Error("--target requires a command");
@@ -74,7 +99,20 @@ function parseArgs(argv: string[]): CliOptions {
       break;
     }
   }
-  return { threadId, dbPath, outPath, target };
+  return { threadId, dbPath, outPath, promptVersion, target };
+}
+
+/**
+ * A bare filename (no `/` or `\`) is filed under results/<promptVersion>/;
+ * anything containing a separator is an explicit path and passes through
+ * unchanged. Creates the destination directory if needed — results/v1,
+ * results/v2, results/v3 aren't all guaranteed to exist yet.
+ */
+function resolveOutPath(outPath: string, promptVersion: PromptVersion): string {
+  const isBareFilename = !outPath.includes("/") && !outPath.includes("\\") && !isAbsolute(outPath);
+  const resolved = isBareFilename ? join(REPO_ROOT, "results", promptVersion, outPath) : outPath;
+  mkdirSync(dirname(resolved), { recursive: true });
+  return resolved;
 }
 
 interface PendingInterrupt {
@@ -96,11 +134,11 @@ async function promptForApprovals(pending: PendingInterrupt[]): Promise<Record<s
 }
 
 async function main() {
-  const { threadId, dbPath, outPath, target } = parseArgs(process.argv.slice(2));
-  const graph = buildAuditGraph(target, dbPath);
+  const { threadId, dbPath, outPath, promptVersion, target } = parseArgs(process.argv.slice(2));
+  const graph = buildAuditGraph(target, dbPath, promptVersion);
   const config = { configurable: { thread_id: threadId } };
 
-  console.log(`thread "${threadId}", checkpoint db "${dbPath}"`);
+  console.log(`thread "${threadId}", checkpoint db "${dbPath}", prompt version "${promptVersion}"`);
 
   const snapshot = await graph.getState(config);
   let result: Record<string, unknown>;
@@ -144,8 +182,9 @@ async function main() {
           (result.errors as string[] | undefined) ?? [],
         )
       : (result.report as string);
-    writeFileSync(outPath, content);
-    console.log(`\nReport also written to ${outPath}`);
+    const resolvedOutPath = resolveOutPath(outPath, promptVersion);
+    writeFileSync(resolvedOutPath, content);
+    console.log(`\nReport also written to ${resolvedOutPath}`);
   }
   stdinInterface.close();
 }

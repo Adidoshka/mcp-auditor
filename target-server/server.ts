@@ -167,6 +167,19 @@ const MOCK_DOCUMENTS: Readonly<Record<string, string>> = {
 };
 
 server.registerTool(
+  "list_documents",
+  {
+    title: "List Documents",
+    description:
+      "Returns the documents available in this server. Use this to understand which document IDs are available before trying to read a document.",
+    inputSchema: {},
+  },
+  async () => ({
+    content: [{ type: "text", text: Object.keys(MOCK_DOCUMENTS).join("\n") }],
+  }),
+);
+
+server.registerTool(
   "read_document",
   {
     title: "Read Document",

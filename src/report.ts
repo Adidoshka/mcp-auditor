@@ -96,16 +96,17 @@ export function formatReport(
  * generator doesn't get to trust them either.
  */
 
-// Phase 4's measured classifier numbers (eval/results.md, evidence-first
-// schema, this project's 11-tool fixture) — copied here by hand, not
-// recomputed, because this function only ever sees one run's own
-// findings, never the eval harness's 110-call batch. Update this block
-// if results.md's numbers change; nothing here re-derives them.
+// The v2 follow-up's numbers (eval/results.md, one frozen run, this
+// project's 12-tool fixture) — copied here by hand, not recomputed,
+// because this function only ever sees one run's own findings, never
+// the eval harness's 120-call batch. Update this block if results.md's
+// numbers change; nothing here re-derives them.
 const PHASE4_EVAL_SUMMARY = {
-  fixtureSize: 11,
-  precision: "100.0% (28/28)",
-  recall: "93.3% (28/30)",
-  disagreementRate: "9.1% (1/11 tools)",
+  fixtureSize: 12,
+  precision: "100.0% (30/30 successful calls)",
+  recall: "100.0% (30/30 successful calls)",
+  disagreementRate: "0.0% (0/12 tools)",
+  errorRate: "10/120 calls produced no verdict",
 };
 
 const MECHANISM_LABEL: Record<Finding["mechanism"], string> = {
@@ -159,9 +160,9 @@ export function formatReportHtml(
     renderProbesSection(probes),
     renderErrorsSection(errors),
     `<footer>
-      <p>Classifier's own measured error rate (Phase 4, <code>eval/results.md</code>, this project's ${PHASE4_EVAL_SUMMARY.fixtureSize}-tool fixture) —
-      precision ${PHASE4_EVAL_SUMMARY.precision}, recall ${PHASE4_EVAL_SUMMARY.recall}, disagreement rate ${PHASE4_EVAL_SUMMARY.disagreementRate}.
-      Read as evidence about this classifier on this fixture, not a general accuracy claim.</p>
+      <p>Classifier's own measured error rate (Phase 4 v2 follow-up, <code>eval/results.md</code>, this project's ${PHASE4_EVAL_SUMMARY.fixtureSize}-tool fixture, one frozen run) —
+      precision ${PHASE4_EVAL_SUMMARY.precision}, recall ${PHASE4_EVAL_SUMMARY.recall}, disagreement rate ${PHASE4_EVAL_SUMMARY.disagreementRate}; ${PHASE4_EVAL_SUMMARY.errorRate}.
+      Read as evidence about this classifier on this fixture in one run, not a general accuracy claim — a repeated v1 baseline moved 7.1 recall points between two identical runs.</p>
     </footer>`,
   ]
     .filter((section) => section.length > 0)

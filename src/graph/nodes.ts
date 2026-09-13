@@ -21,7 +21,7 @@ import { listAuditedTools, callTool } from "../mcp/client.js";
 import { checkSchema } from "../rules/schema.js";
 import { labelTool, checkCapabilityChains } from "../rules/capability.js";
 import { selectSkills } from "../llm/skills.js";
-import { classifyDescription, buildInjectionFinding } from "../llm/classify.js";
+import { classifyDescription, buildInjectionFinding, type PromptVersion } from "../llm/classify.js";
 import { formatReport, type ProbeResult } from "../report.js";
 import { synthesizeProbeArgs } from "./probeArgs.js";
 import type { Finding } from "../findings.js";
@@ -36,7 +36,7 @@ import { Semaphore, DEFAULT_CONCURRENCY_LIMIT } from "../concurrency.js";
 const classifySemaphore = new Semaphore(DEFAULT_CONCURRENCY_LIMIT);
 const callToolSemaphore = new Semaphore(DEFAULT_CONCURRENCY_LIMIT);
 
-export function buildNodes(target: StdioServerTarget) {
+export function buildNodes(target: StdioServerTarget, promptVersion: PromptVersion = "v2") {
   async function listTools() {
     const tools = await listAuditedTools(target);
     return { tools };
@@ -64,8 +64,11 @@ export function buildNodes(target: StdioServerTarget) {
     const skills = selectSkills(labelTool(tool));
 
     try {
+      // Defaults to v2, not the classifyDescription default: v1 is kept only
+      // as eval/run.ts's comparison baseline, per the frozen-run result in
+      // eval/results.md. cli.ts's --prompt-version can override this per run.
       const verdict = await classifySemaphore.run(() =>
-        classifyDescription(tool.description, { skills }),
+        classifyDescription(tool.description, { skills, promptVersion }),
       );
       const injectionFinding = buildInjectionFinding(tool.name, verdict, skills);
       if (injectionFinding !== null) findings.push(injectionFinding);

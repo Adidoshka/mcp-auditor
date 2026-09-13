@@ -13,9 +13,22 @@
  * exactly what CLAUDE.md's per-finding mechanism tag exists to keep
  * visible.
  *
- * The rubric this applies lives in prompts/{v1,v2}.md, loaded from
+ * The rubric this applies lives in prompts/{v1,v2,v3}.md, loaded from
  * disk by version (default "v1") — never inlined, so Phase 4 can diff
- * v1 against v2 as separate, versioned files rather than a code diff.
+ * versions as separate files rather than a code diff.
+ *
+ * The user message wraps the description in `<tool_description>` tags
+ * unconditionally, for every prompt version, not only v3 (added
+ * alongside v3, which is the first prompt that tells the model what
+ * the tags mean). Gating the wrapping on promptVersion === "v3" was
+ * considered and rejected: it would mean v1/v2 no longer see the same
+ * input shape v3 does, confounding prompt wording with input format in
+ * any future comparison. One consequence: the frozen `eval/run-v1.json`
+ * and `eval/run-v2.json` results predate this change and are not
+ * bit-for-bit reproducible by re-running against the same prompt
+ * version today — the recorded numbers stand as-is; a new v1/v2 run
+ * now would be a different (untagged-vs-tagged-input) measurement, not
+ * a repeat of the old one.
  *
  * `classifyDescription`'s optional `skills` are the one disclosed
  * exception to "description only": which skill(s) apply to a tool is
@@ -109,7 +122,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROMPTS_DIR = join(__dirname, "prompts");
 
 /** Versioned prompt files under prompts/ — per CLAUDE.md constraint 2, separable artifacts Phase 4 can diff. */
-export type PromptVersion = "v1" | "v2";
+export type PromptVersion = "v1" | "v2" | "v3";
 
 // See the file header for why this is an NVIDIA NIM-hosted open model
 // rather than a Claude one, and why gpt-oss-20b specifically (Nemotron
@@ -264,7 +277,10 @@ export async function classifyDescription(
           max_tokens: 1024,
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: description },
+            // Wrapped in tags unconditionally, not only for v3, so v1/v2
+            // see the identical input shape v3 does — see the file
+            // header for why this matters for cross-version comparison.
+            { role: "user", content: `<tool_description>\n${description}\n</tool_description>` },
           ],
           ...(temperature !== undefined ? { temperature } : {}),
           response_format: {

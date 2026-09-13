@@ -16,11 +16,16 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
 import { SqliteSaver } from "@langchain/langgraph-checkpoint-sqlite";
 import type { StdioServerTarget } from "../mcp/client.js";
+import type { PromptVersion } from "../llm/classify.js";
 import { AuditState } from "./state.js";
 import { buildNodes } from "./nodes.js";
 
-export function buildAuditGraph(target: StdioServerTarget, checkpointDbPath: string) {
-  const nodes = buildNodes(target);
+export function buildAuditGraph(
+  target: StdioServerTarget,
+  checkpointDbPath: string,
+  promptVersion?: PromptVersion,
+) {
+  const nodes = buildNodes(target, promptVersion);
 
   const graph = new StateGraph(AuditState)
     .addNode("listTools", nodes.listTools)

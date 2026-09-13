@@ -52,7 +52,9 @@ These are the calls I'll be asked about in the presentation, so the reasoning ha
 | Capability labeling rules in `rules/capability.ts` | done — schema shape first, name second, description never |
 | The definition of "injection" in `prompts/v1.md` | done — addressee framing ("descriptions describe; injections advise") plus a deletion test, as the definition itself; bullets/examples are illustrations only |
 | Retry policy values and status-code handling | done — delegated explicitly rather than drafted-and-approved: 3 attempts, 500ms base/8s cap exponential backoff with full jitter, retry only on 429/5xx (never 408/409, which the openai SDK's own default retry gets wrong), `Retry-After` honored when present; see `retry.ts` |
-| The graph's edges and routing conditions | open (Phase 5) |
+| The graph's edges and routing conditions | done (Phase 5) |
+| The `v2.md` injection boundary | done — guidance about using this tool is descriptive; directions to act outside its declared interface are injected |
+| The `v3.md` revisions | done — delimits the description as data (`<tool_description>` tags, wrapped unconditionally in every prompt version so v1/v2/v3 stay comparable), states the "Use this before X" vs. "Before using this, do X" distinction explicitly, and treats imperative mood as descriptive by default; examples drawn from two live-server false positives but domain-shifted so v3 isn't just pattern-matching the servers that prompted it. Not yet run — see `eval/results.md`'s note that a filesystem/memory rerun can't demonstrate generalization now that those shapes are examples |
 
 Boilerplate around these is fine to generate — the decisions inside them aren't.
 
@@ -70,12 +72,12 @@ End any turn that touches files with a plain list of what changed, file by file,
 
 ## Current phase
 
-All five phases from PLAN.md now have a working first pass — **Phase 5** just closed. What's actually open is the `v2.md` decision below, not a phase.
+All five phases from PLAN.md and the fixture-first `v2.md` follow-up are complete.
 
-Done: Phase 0 (10-tool target server + ground truth, extended to 11 in Phase 2), Phase 1, Phase 2, Phase 3, Phase 4 (see `eval/results.md` — field-order fix tested in isolation: recall 90%→93.3%, disagreement rate unchanged at 9.1%, a real partial improvement not a cure). Phase 5: `graph/state.ts`, `graph/nodes.ts`, `graph/graph.ts`, `graph/probeArgs.ts`, `report.ts` (named since Phase 0, never built until now), `cli.ts`. Fan-out via `Send`, conditional routing (chain-finding sources + injected tools → deep branch — kept exactly as literally stated, not tightened, since every tightening needs a confidence field `capability.ts` doesn't have), `interrupt()` gating a real invocation (not the stubbed version PLAN.md's cut list allowed), `SqliteSaver` for durable checkpointing. Kill-and-resume run for real through the actual CLI, not just verified in isolated mechanics: process killed mid-approval-loop, a genuinely separate process resumed the same thread 5 seconds later ("Resuming a prior run — found 6 pending step(s) on disk") — too fast to have redone any of the 11 classify calls, confirming the expensive analysis phase survived the kill.
+Done: Phase 0 (10-tool target server + ground truth, extended to 11 in Phase 2 and 12 for the Phase 4 follow-up), Phase 1, Phase 2, Phase 3, Phase 4 (see `eval/results.md` — field-order fix tested in isolation: recall 90%→93.3%, then the frozen v2 follow-up scored 100% precision and recall across 110 successful calls with 10/120 call errors), and Phase 5. Phase 5 added `graph/state.ts`, `graph/nodes.ts`, `graph/graph.ts`, `graph/probeArgs.ts`, `report.ts`, and `cli.ts`. Fan-out uses `Send`; conditional routing sends chain-finding sources plus injected tools to the deep branch; `interrupt()` gates a real invocation; `SqliteSaver` provides durable checkpointing. Kill-and-resume was exercised through the real CLI: a separate process resumed six pending steps without repeating the 11 completed classify calls.
 
 Four real bugs found and fixed while building this, not written around: a node/state name collision LangGraph rejected outright; LangGraph's `maxConcurrency` config option is never actually read by Pregel's own execution loop (confirmed by reading the source) — an unthrottled fan-out produced a real NIM connection timeout, fixed with a proper `Semaphore` in `concurrency.ts`; `node:readline/promises`'s `question()` stalls forever on its second call against piped stdin (a Node bug, not this code); a malformed-JSON classify response was crashing the whole graph run until `analyzeTool` got the same per-task error-resilience `eval/run.ts` already had.
 
-In progress: whether to write `v2.md` targeting the remaining scope-of-function judgment issue in `compile_account_summary` — not yet decided, per "Things I decide."
+The v2 follow-up added the honest `list_documents` control before prompt revision, then ran v1 and v2 once each without post-result tuning. V1 flagged the control 10/10; every successful v2 call across all 12 tools matched ground truth. Full limitations, including 10 slow failures in each run, are recorded in `eval/results.md`.
 
 Not started: nothing from PLAN.md's five phases. The cut-list sandboxed-probe item was *not* cut — built for real per an explicit decision to do so.
