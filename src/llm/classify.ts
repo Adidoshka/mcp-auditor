@@ -242,7 +242,14 @@ export interface ClassifyOptions {
    * decides that; it just doesn't block it.
    */
   temperature?: number;
-  /** Which prompts/*.md to load as the system rubric. Defaults to "v1" — Phase 4's v1-vs-v2 comparison is the caller with a reason to pass "v2". */
+  /**
+   * Which prompts/*.md to load as the system rubric. Defaults to "v1"
+   * here, but the two real callers each pick their own: graph/nodes.ts
+   * defaults its own call to "v2" (cli.ts's --prompt-version can
+   * override it), and eval/run.ts takes it straight from argv for
+   * Phase 4's version comparisons — see PROMPT_VERSIONS above for the
+   * full set.
+   */
   promptVersion?: PromptVersion;
 }
 
