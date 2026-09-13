@@ -23,7 +23,7 @@
  * requiring them to run it or infer it from report.ts.
  *
  * --prompt-version picks which prompts/*.md the classify node runs
- * (default "v2", matching graph/nodes.ts's own default) — the CLI is
+ * (default "v3", matching graph/nodes.ts's own default) — the CLI is
  * the one place a person actually chooses, so it's the one place this
  * needs to be a flag rather than a hardcoded call site.
  *
@@ -69,7 +69,7 @@ function parseArgs(argv: string[]): CliOptions {
   let threadId = "default";
   let dbPath = `${REPO_ROOT}/.mcp-auditor-checkpoints.sqlite`;
   let outPath: string | undefined;
-  let promptVersion: PromptVersion = "v2";
+  let promptVersion: PromptVersion = "v3";
   let target: StdioServerTarget = {
     command: "npx",
     args: ["tsx", "target-server/server.ts"],
@@ -182,6 +182,7 @@ async function main() {
           (result.findings as Finding[] | undefined) ?? [],
           (result.probes as ProbeResult[] | undefined) ?? [],
           (result.errors as string[] | undefined) ?? [],
+          promptVersion,
         )
       : (result.report as string);
     const resolvedOutPath = resolveOutPath(outPath, promptVersion);

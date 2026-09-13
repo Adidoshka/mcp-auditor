@@ -36,7 +36,7 @@ import { Semaphore, DEFAULT_CONCURRENCY_LIMIT } from "../concurrency.js";
 const classifySemaphore = new Semaphore(DEFAULT_CONCURRENCY_LIMIT);
 const callToolSemaphore = new Semaphore(DEFAULT_CONCURRENCY_LIMIT);
 
-export function buildNodes(target: StdioServerTarget, promptVersion: PromptVersion = "v2") {
+export function buildNodes(target: StdioServerTarget, promptVersion: PromptVersion = "v3") {
   async function listTools() {
     const tools = await listAuditedTools(target);
     return { tools };
@@ -64,7 +64,7 @@ export function buildNodes(target: StdioServerTarget, promptVersion: PromptVersi
     const skills = selectSkills(labelTool(tool));
 
     try {
-      // Defaults to v2, not the classifyDescription default: v1 is kept only
+      // Defaults to v3, not the classifyDescription default: v1/v2 are kept only
       // as eval/run.ts's comparison baseline, per the frozen-run result in
       // eval/results.md. cli.ts's --prompt-version can override this per run.
       const verdict = await classifySemaphore.run(() =>

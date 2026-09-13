@@ -152,7 +152,10 @@ async function main() {
   let disagreeingTools = 0;
   const disagreementDetail: string[] = [];
   for (const [tool, results] of byTool) {
-    const verdicts = results.filter((r) => r.result.ok).map((r) => (r.result as any).verdict);
+    const verdicts = results
+      .map((r) => r.result)
+      .filter((result): result is Extract<RunOutcome["result"], { ok: true }> => result.ok)
+      .map((result) => result.verdict);
     const distinct = new Set(verdicts);
     if (distinct.size > 1) {
       disagreeingTools++;

@@ -245,7 +245,7 @@ export interface ClassifyOptions {
   /**
    * Which prompts/*.md to load as the system rubric. Defaults to "v1"
    * here, but the two real callers each pick their own: graph/nodes.ts
-   * defaults its own call to "v2" (cli.ts's --prompt-version can
+   * defaults its own call to "v3" (cli.ts's --prompt-version can
    * override it), and eval/run.ts takes it straight from argv for
    * Phase 4's version comparisons — see PROMPT_VERSIONS above for the
    * full set.

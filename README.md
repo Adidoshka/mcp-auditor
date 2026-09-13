@@ -27,7 +27,7 @@ npm run eval            # Phase 4: precision / recall / disagreement rate
 npm run audit           # the full LangGraph pipeline, interactive
 ```
 
-`npm run audit` pauses for your approval (`y`/`N`) before invoking any flagged tool for real. Add `--out report.html` to save the report, `--prompt-version v1|v2|v3` to pick the injection rubric (default `v2`), `--thread <name>` to make the run resumable — rerunning an interrupted thread picks up where it left off. A bare `--out` filename files itself under `results/<prompt-version>/` automatically, version-prefixed (e.g. `--out report.html --prompt-version v2` writes `results/v2/v2_report.html`); a path containing a separator is written exactly as given instead. A completed thread cannot be reused; choose a new thread name for each new audit.
+`npm run audit` pauses for your approval (`y`/`N`) before invoking any flagged tool for real. Add `--out report.html` to save the report, `--prompt-version v1|v2|v3` to pick the injection rubric (default `v3`), `--thread <name>` to make the run resumable — rerunning an interrupted thread picks up where it left off. A bare `--out` filename files itself under `results/<prompt-version>/` automatically, version-prefixed (e.g. `--out report.html --prompt-version v2` writes `results/v2/v2_report.html`); a path containing a separator is written exactly as given instead. A completed thread cannot be reused; choose a new thread name for each new audit.
 
 To audit another stdio server, put auditor options first and the server command last: `npm run audit -- --thread filesystem-demo --target npx -y @modelcontextprotocol/server-filesystem C:\path\to\audit`. Everything after the `--target` command is passed to that server; without `--target`, the bundled fixture is used.
 
@@ -128,10 +128,10 @@ mcp-auditor/
 | 1 — deterministic rules | 10 findings / historical 11-tool fixture, **0 model calls** (6 schema: 2 TP, 4 FP · 4 capability: 4 TP, 0 FP) |
 | 2 — LLM node + skills | Both injections caught |
 | 3 — retry/timeouts | Pointed at a real server (`@modelcontextprotocol/server-filesystem`) — found a real capability-labeling false positive |
-| 4 — evaluation | One frozen v2 run on this fixture: precision **100%** (30/30), recall **100%** (30/30), disagreement **0%** (0/12 tools), with **10/120 call errors**; repeated v1 baselines varied by 7.1 recall points |
+| 4 — evaluation | One frozen v2 run on this fixture: precision **100%** (30/30), recall **100%** (30/30), disagreement **0%** (0/12 tools), with **10/120 call errors**; repeated v1 baselines varied by 7.1 recall points. `v3.md` followed, validated only via single live-server runs (not the frozen protocol): fixed both v2 false positives found on real servers and showed 0 false positives on an entirely unseen server |
 | 5 — LangGraph | `interrupt()` gate + kill-and-resume proven live — 5s to recover, faster than any single classify call |
 
-The schema rule's low precision is load-bearing: two injections sit on tools whose code touches nothing suspicious, so a schema/name-based labeler has nothing to flag by construction — that gap is what the LLM node closes. V1's remaining hard case was `compile_account_summary`; the fixture-first v2 follow-up corrected it and the new benign-guidance control in one frozen run, while 10 slow calls still produced no verdict. Full breakdown: [eval/results.md](eval/results.md).
+The schema rule's low precision is load-bearing: two injections sit on tools whose code touches nothing suspicious, so a schema/name-based labeler has nothing to flag by construction — that gap is what the LLM node closes. V1's remaining hard case was `compile_account_summary`; the fixture-first v2 follow-up corrected it and the new benign-guidance control in one frozen run, while 10 slow calls still produced no verdict. Real servers then surfaced two false positives v2 still had (`list_allowed_directories`, `read_graph`) — `v3.md` addressed both, but only single-run live evidence exists for it, not a repeated eval like v1/v2's. Full breakdown, including the honest contamination caveat on v3's own worked examples: [eval/results.md](eval/results.md).
 
 ## ⚙️ Configuration
 
@@ -142,7 +142,7 @@ The schema rule's low precision is load-bearing: two injections sit on tools who
 | Classifier timeout | 5s connect / 30s per call |
 | MCP timeout | 10s connect / 15s `tools/list` |
 | Concurrency | 4 (shared `Semaphore`) |
-| CLI flags | `--thread <id>` (resume), `--db <path>` (checkpoint file), `--out <path>` (save report), `--prompt-version v1\|v2\|v3` (injection rubric, default `v2`), `--target <command> [...args]` (stdio server; must come last) |
+| CLI flags | `--thread <id>` (resume), `--db <path>` (checkpoint file), `--out <path>` (save report), `--prompt-version v1\|v2\|v3` (injection rubric, default `v3`), `--target <command> [...args]` (stdio server; must come last) |
 
 ## 📋 Phase → Topic Mapping
 

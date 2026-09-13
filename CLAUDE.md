@@ -55,6 +55,7 @@ These are the calls I'll be asked about in the presentation, so the reasoning ha
 | The graph's edges and routing conditions | done (Phase 5) |
 | The `v2.md` injection boundary | done — guidance about using this tool is descriptive; directions to act outside its declared interface are injected |
 | The `v3.md` revisions | done — delimits the description as data (`<tool_description>` tags, wrapped unconditionally in every prompt version so v1/v2/v3 stay comparable), states the "Use this before X" vs. "Before using this, do X" distinction explicitly, and treats imperative mood as descriptive by default; examples drawn from two live-server false positives but domain-shifted so v3 isn't just pattern-matching the servers that prompted it. Run against all four servers (fixture, filesystem, memory, `server-everything`) — see `eval/results.md` for what each did and didn't show |
+| Default `--prompt-version` for `cli.ts`/`nodes.ts` | done — `v3`, on the strength of it fixing v2's two diagnosed live-server false positives and 0 false positives on the entirely unseen `server-everything`; v1/v2 stay selectable and are what `eval/run.ts`'s frozen protocol still measures |
 
 Boilerplate around these is fine to generate — the decisions inside them aren't.
 

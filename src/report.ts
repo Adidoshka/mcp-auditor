@@ -14,6 +14,7 @@
  */
 
 import type { CapabilityFinding, Finding, InjectionFinding, SchemaFinding } from "./findings.js";
+import type { PromptVersion } from "./llm/classify.js";
 
 export interface ProbeResult {
   tool: string;
@@ -96,17 +97,18 @@ export function formatReport(
  * generator doesn't get to trust them either.
  */
 
-// The v2 follow-up's numbers (eval/results.md, one frozen run, this
-// project's 12-tool fixture) — copied here by hand, not recomputed,
-// because this function only ever sees one run's own findings, never
-// the eval harness's 120-call batch. Update this block if results.md's
-// numbers change; nothing here re-derives them.
-const PHASE4_EVAL_SUMMARY = {
-  fixtureSize: 12,
-  precision: "100.0% (30/30 successful calls)",
-  recall: "100.0% (30/30 successful calls)",
-  disagreementRate: "0.0% (0/12 tools)",
-  errorRate: "10/120 calls produced no verdict",
+// Copied here by hand from eval/results.md, not recomputed — this
+// function only ever sees one run's own findings, never eval/run.ts's
+// own batches. v1 and v2 both went through eval/run.ts's frozen
+// 10-run-per-tool protocol on the 12-tool fixture; v3 didn't (there is
+// no run-v3.json) — its evidence is single live-server runs instead, a
+// different and weaker kind of measurement, stated as such rather than
+// squeezed into the same precision/recall shape as v1/v2. Update this
+// block if results.md's numbers change; nothing here re-derives them.
+const PROMPT_VERSION_SUMMARY: Record<PromptVersion, string> = {
+  v1: "one frozen 12-tool run — precision 71.4% (25/35), recall 86.2% (25/29), disagreement 8.3% (1/12 tools); 10/120 calls produced no verdict.",
+  v2: "one frozen 12-tool run — precision 100.0% (30/30 successful calls), recall 100.0% (30/30 successful calls), disagreement 0.0% (0/12 tools); 10/120 calls produced no verdict.",
+  v3: "not run through eval/run.ts's frozen protocol — single live-server runs only (fixture, filesystem, memory, server-everything): both previously diagnosed false positives stopped reproducing (two of those cases are now v3's own worked examples, so that's limited evidence of generalizing), 0 false positives on the entirely unseen server-everything, and all 3 fixture injections caught correctly in that one run.",
 };
 
 const MECHANISM_LABEL: Record<Finding["mechanism"], string> = {
@@ -134,6 +136,7 @@ export function formatReportHtml(
   findings: readonly Finding[],
   probes: readonly ProbeResult[] = [],
   errors: readonly string[] = [],
+  promptVersion: PromptVersion = "v3",
 ): string {
   const byMechanism = {
     schema: findings.filter((f): f is SchemaFinding => f.mechanism === "schema"),
@@ -160,9 +163,9 @@ export function formatReportHtml(
     renderProbesSection(probes),
     renderErrorsSection(errors),
     `<footer>
-      <p>Classifier's own measured error rate (Phase 4 v2 follow-up, <code>eval/results.md</code>, this project's ${PHASE4_EVAL_SUMMARY.fixtureSize}-tool fixture, one frozen run) —
-      precision ${PHASE4_EVAL_SUMMARY.precision}, recall ${PHASE4_EVAL_SUMMARY.recall}, disagreement rate ${PHASE4_EVAL_SUMMARY.disagreementRate}; ${PHASE4_EVAL_SUMMARY.errorRate}.
-      Read as evidence about this classifier on this fixture in one run, not a general accuracy claim — a repeated v1 baseline moved 7.1 recall points between two identical runs.</p>
+      <p>Classifier's own measured behavior for prompt <code>${promptVersion}</code> (<code>eval/results.md</code>) —
+      ${PROMPT_VERSION_SUMMARY[promptVersion]}
+      Read as evidence about this classifier, not a general accuracy claim — a repeated v1 baseline alone moved 7.1 recall points between two identical runs.</p>
     </footer>`,
   ]
     .filter((section) => section.length > 0)

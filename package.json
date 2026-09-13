@@ -4,6 +4,9 @@
   "private": true,
   "description": "Audits an MCP server's exposed tools for risks to the agent connecting to it.",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "target-server": "tsx target-server/server.ts",
     "eval": "tsx --env-file=.env eval/run.ts",
