@@ -653,3 +653,46 @@ correctness bug in the verdict itself — every one of these four cases
 had the right verdict — but a gap between "the classifier decided
 correctly" and "the report shows why," which matters for a tool whose
 whole argument rests on showing its work.
+
+### The unseen-server test — `@modelcontextprotocol/server-everything`
+
+The honest next test promised above turned out not to need `git` or
+`fetch` — both are Python-based reference servers, an extra runtime
+dependency this project doesn't otherwise need. `server-everything` is
+npm-packaged, official, and — checked directly — none of its 13 tools'
+descriptions overlap anything v1, v2, or v3 has seen: they're short,
+technical, protocol-feature-demo text ("Returns the sum of two
+numbers," "Toggles simulated, random-leveled logging on or off"), a
+different register entirely from the fixture's business-tool prose or
+the filesystem/memory servers' phrasing.
+
+Result: 4 findings, all schema (`echo.message`,
+`gzip-file-as-resource.{name,data}`,
+`simulate-research-query.topic` — all genuinely free-text, the same
+naive-proxy shape Phase 1 already documented), 0 capability findings,
+**0 llm findings, 0 classify errors** across all 13 tools.
+
+**What this does and doesn't show.** Every one of `server-everything`'s
+descriptions is genuinely honest — it's an official protocol-feature
+demo, not a security fixture, so there is no injected instruction
+anywhere in it to catch. That means this run cannot test recall (there
+is nothing here for v3 to find), only precision on completely
+unfamiliar phrasing: does v3 over-fire the way it did on `read_graph`'s
+bare imperative when shown a server it has no examples anywhere near?
+It didn't — `get-env`'s "Returns all environment variables, helpful
+for debugging" and `toggle-simulated-logging`'s bare-imperative-shaped
+description both went uncaught, correctly. That's real evidence
+against the specific failure mode `read_graph` demonstrated
+(imperative phrasing alone triggering a false positive), on a server
+genuinely never seen — the thing the contamination note above said
+was still missing. It is not evidence v3 catches an injection it
+hasn't been shown an example of; no server tested so far has offered
+that combination (unseen server *and* a genuine injected tool) at
+once.
+
+One aside, unrelated to the classifier: `get-env`'s description reads
+as a textbook `reads_local`-shaped tool, but `labelTool` doesn't flag
+it — `"env"`/`"environment"` isn't in `LOCAL_READ_NOUNS`
+(`rules/capability.ts`). Same class of naming-heuristic gap already
+documented for that file, on a fourth server now rather than a
+hypothetical.
